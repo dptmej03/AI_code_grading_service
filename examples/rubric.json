@@ -1,0 +1,40 @@
+{
+  "problems": [
+    {
+      "problem_id": 1,
+      "full_score": 20,
+      "partial_score_criteria": [
+        {
+          "item": "변수명 적절성",
+          "score": 5
+        },
+        {
+          "item": "알고리즘 정확성",
+          "score": 10
+        },
+        {
+          "item": "출력값 일치",
+          "score": 5
+        }
+      ]
+    },
+    {
+      "problem_id": 2,
+      "full_score": 30,
+      "partial_score_criteria": [
+        {
+          "item": "코드 가독성",
+          "score": 10
+        },
+        {
+          "item": "효율성",
+          "score": 10
+        },
+        {
+          "item": "에러 처리",
+          "score": 10
+        }
+      ]
+    }
+  ]
+}

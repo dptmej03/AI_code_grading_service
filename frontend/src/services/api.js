@@ -1,0 +1,36 @@
+import axios from 'axios';
+
+const API = axios.create({ baseURL: '' });
+
+API.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+API.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(err);
+  }
+);
+
+export const authAPI = {
+  login: (username, password) => API.post('/auth/login', { username, password }),
+  me: () => API.get('/auth/me'),
+};
+
+export const gradingAPI = {
+  startGrading: (formData) => API.post('/grading/start', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  getSession: (sessionId) => API.get(`/grading/session/${sessionId}`),
+  getResults: (sessionId) => API.get(`/grading/session/${sessionId}/results`),
+  downloadExcel: (sessionId) => API.get(`/grading/session/${sessionId}/download`, { responseType: 'blob' }),
+};
+
+export default API;
