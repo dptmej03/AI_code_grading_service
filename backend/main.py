@@ -32,6 +32,7 @@ from services.notebook_service import (
     extract_notebooks_from_zip, parse_student_id_from_filename
 )
 from services.grading_service import grade_student_notebook
+from services.llm_service import APIQuotaError
 
 app = FastAPI(title="Jupyter Notebook 자동 채점 시스템", version="2.0.0")
 
@@ -333,6 +334,7 @@ async def run_grading_session(
     session.status = "running"
     total = len(student_notebooks)
 
+    quota_exceeded = False
     for i, (filename, content) in enumerate(student_notebooks):
         session.current_student = filename
         try:
@@ -354,6 +356,11 @@ async def run_grading_session(
                 error=error
             )
             session.results.append(student_result)
+        except APIQuotaError:
+            quota_exceeded = True
+            session.processed_students = i
+            session.progress = (i / total) * 100
+            break
         except Exception as e:
             session.results.append(StudentResult(
                 filename=filename,
@@ -367,11 +374,16 @@ async def run_grading_session(
         session.processed_students = i + 1
         session.progress = ((i + 1) / total) * 100
 
-    session.status = "completed"
-    session.progress = 100.0
-    session.current_student = None
+    if quota_exceeded:
+        session.status = "quota_exceeded"
+        session.current_student = None
+        session.error = "OpenAI API 사용량이 초과되었습니다. API를 충전한 후 이어서 채점하세요."
+    else:
+        session.status = "completed"
+        session.progress = 100.0
+        session.current_student = None
 
-    # Persist completed session to DB
+    # Persist to DB
     db = SessionLocal()
     try:
         results_data = [r.model_dump() for r in session.results]
@@ -379,14 +391,93 @@ async def run_grading_session(
             models.GradingSessionDB.id == session_id
         ).first()
         if db_record:
-            db_record.status = "completed"
-            db_record.progress = 100.0
-            db_record.processed_students = total
+            db_record.status = session.status
+            db_record.progress = session.progress
+            db_record.processed_students = session.processed_students
             db_record.results_json = json.dumps(results_data, ensure_ascii=False)
-            db_record.completed_at = datetime.utcnow()
+            db_record.error = session.error
+            if not quota_exceeded:
+                db_record.completed_at = datetime.utcnow()
             db.commit()
     finally:
         db.close()
+
+
+@app.post("/grading/resume/{session_id}")
+async def resume_grading(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    answer_notebook: UploadFile = File(...),
+    student_zip: UploadFile = File(...),
+    criteria_file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    db_record = db.query(models.GradingSessionDB).filter(
+        models.GradingSessionDB.id == session_id
+    ).first()
+    if not db_record or db_record.status != "quota_exceeded":
+        raise HTTPException(status_code=400, detail="이어서 채점할 수 없는 세션입니다 (quota_exceeded 상태가 아님)")
+
+    answer_bytes = await answer_notebook.read()
+    zip_bytes = await student_zip.read()
+    criteria_bytes = await criteria_file.read()
+
+    try:
+        criteria_data = json.loads(criteria_bytes.decode('utf-8'))
+        criteria = GradingCriteria(**criteria_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"채점 기준 파일 파싱 오류: {str(e)}")
+
+    try:
+        all_notebooks = extract_notebooks_from_zip(zip_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"ZIP 파일 처리 오류: {str(e)}")
+
+    # 이미 채점된 학생 파일명 수집
+    already_done = set()
+    if db_record.results_json:
+        try:
+            already_done = {r['filename'] for r in json.loads(db_record.results_json)}
+        except Exception:
+            pass
+
+    remaining = [(f, c) for f, c in all_notebooks if f not in already_done]
+    if not remaining:
+        raise HTTPException(status_code=400, detail="이어서 채점할 학생이 없습니다 (모두 완료됨)")
+
+    # 기존 결과 복원 후 세션 갱신
+    existing_results = []
+    if db_record.results_json:
+        try:
+            existing_results = [StudentResult(**r) for r in json.loads(db_record.results_json)]
+        except Exception:
+            pass
+
+    new_total = len(existing_results) + len(remaining)
+    session = GradingSession(
+        session_id=session_id,
+        status="running",
+        progress=db_record.progress,
+        total_students=new_total,
+        processed_students=len(existing_results),
+        results=existing_results,
+        error=None,
+    )
+    grading_sessions[session_id] = session
+
+    db_record.status = "running"
+    db_record.total_students = new_total
+    db_record.error = None
+    db.commit()
+
+    background_tasks.add_task(
+        run_grading_session,
+        session_id, answer_bytes, remaining, criteria,
+        db_record.subject_id, current_user["id"]
+    )
+
+    return {"session_id": session_id, "remaining_students": len(remaining)}
 
 
 @app.get("/grading/session/{session_id}")

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 
 
 class Token(BaseModel):
@@ -66,13 +66,16 @@ class PartialScoreCriterion(BaseModel):
 
 
 class Problem(BaseModel):
-    problem_id: int
+    problem_id: Union[int, str]
     full_score: float
     partial_score_criteria: List[PartialScoreCriterion]
+    evaluation_guideline: Optional[str] = None
 
 
 class GradingCriteria(BaseModel):
     problems: List[Problem]
+    global_evaluation_guideline: Optional[str] = None
+    exam_title: Optional[str] = None
 
 
 class PartialScoreResult(BaseModel):
@@ -93,7 +96,7 @@ class NotebookCell(BaseModel):
 
 
 class ProblemResult(BaseModel):
-    problem_id: int
+    problem_id: Union[int, str]
     full_score: float
     obtained_score: float
     output_match: bool
