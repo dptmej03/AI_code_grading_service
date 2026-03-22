@@ -37,6 +37,9 @@ export const gradingAPI = {
   startGrading: (formData) => API.post('/grading/start', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  resumeGrading: (sessionId, formData) => API.post(`/grading/resume/${sessionId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getSession: (sessionId) => API.get(`/grading/session/${sessionId}`),
   getResults: (sessionId) => API.get(`/grading/session/${sessionId}/results`),
   downloadExcel: (sessionId) => API.get(`/grading/session/${sessionId}/download`, { responseType: 'blob' }),

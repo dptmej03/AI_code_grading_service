@@ -9,7 +9,7 @@ from services.notebook_service import (
     extract_cell_outputs, extract_code_cells, parse_notebook,
     split_notebook_by_problems, execute_notebook
 )
-from services.llm_service import grade_with_ai
+from services.llm_service import grade_with_ai, APIQuotaError
 
 
 def normalize_output(text: str) -> str:
@@ -101,9 +101,11 @@ async def grade_student_notebook(
 
     for problem in criteria.problems:
         pid = problem.problem_id
+        # "Q1", "문제1" 등 문자열 problem_id에서 숫자 추출하여 노트북 셀 조회
+        pid_num = int(re.sub(r'\D', '', str(pid))) if not isinstance(pid, int) else pid
 
-        ans_cells = answer_problems.get(pid, [])
-        stu_cells = student_problems.get(pid, [])
+        ans_cells = answer_problems.get(pid_num, [])
+        stu_cells = student_problems.get(pid_num, [])
 
         ans_code = "\n\n".join(c['source'] for c in ans_cells) if ans_cells else ""
         stu_code = "\n\n".join(c['source'] for c in stu_cells) if stu_cells else ""
@@ -159,13 +161,20 @@ async def grade_student_notebook(
         # AI grading
         ai_partial_scores = []
         ai_overall = ""
-        if stu_code and problem.partial_score_criteria:
+        no_code_reason = None
+        if not stu_cells:
+            no_code_reason = "문제 마커 없음 — 미제출 처리"
+        elif not stu_code.strip():
+            no_code_reason = "빈 코드 — 미제출 처리"
+
+        if no_code_reason is None and problem.partial_score_criteria:
             try:
                 ai_results, ai_overall = await grade_with_ai(
                     student_code=stu_code,
                     answer_code=ans_code,
                     criteria=problem.partial_score_criteria,
-                    problem_id=pid
+                    problem_id=pid,
+                    problem_description=problem.evaluation_guideline
                 )
                 for r in ai_results:
                     ai_partial_scores.append(PartialScoreResult(
@@ -174,6 +183,8 @@ async def grade_student_notebook(
                         score=r['score'],
                         reason=r['reason']
                     ))
+            except APIQuotaError:
+                raise
             except Exception as e:
                 for c in problem.partial_score_criteria:
                     ai_partial_scores.append(PartialScoreResult(
@@ -183,13 +194,13 @@ async def grade_student_notebook(
                         reason=f"AI 채점 오류: {str(e)}"
                     ))
         else:
-            # No code submitted
+            reason = no_code_reason or "채점 기준 없음"
             for c in problem.partial_score_criteria:
                 ai_partial_scores.append(PartialScoreResult(
                     item=c.item,
                     max_score=c.score,
                     score=0,
-                    reason="제출된 코드 없음"
+                    reason=reason
                 ))
 
         obtained = sum(ps.score for ps in ai_partial_scores)

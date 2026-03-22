@@ -12,13 +12,6 @@ function NotebookPanel({ student }) {
           <div key={problem.problem_id} style={nb.problemSection}>
             <div style={nb.problemBadge}>
               문제 {problem.problem_id}
-              <span style={{
-                ...nb.matchBadge,
-                background: problem.output_match ? '#dcfce7' : '#fef9c3',
-                color: problem.output_match ? '#16a34a' : '#b45309',
-              }}>
-                {problem.output_match ? '✓ 출력 일치' : '△ 출력 불일치'}
-              </span>
             </div>
 
             {problem.code_cells && problem.code_cells.length > 0 ? (
@@ -202,9 +195,6 @@ const nb = {
     fontSize: 13, fontWeight: 700, color: '#89b4fa',
     marginBottom: 10, paddingLeft: 4,
   },
-  matchBadge: {
-    borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600,
-  },
   cell: {
     border: '1px solid #313244', borderRadius: 8,
     marginBottom: 10, overflow: 'hidden',
@@ -231,7 +221,7 @@ const nb = {
 /* ── Feedback panel (right) ── */
 const fb = {
   panel: {
-    width: 420, flexShrink: 0,
+    width: 500, flexShrink: 0,
     display: 'flex', flexDirection: 'column',
     overflow: 'hidden', background: '#fff',
   },
@@ -254,11 +244,18 @@ const fb = {
     border: '1px solid #fecaca', color: '#dc2626',
     borderRadius: 8, padding: '10px 14px', fontSize: 13,
   },
-  body: { overflowY: 'auto', flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 },
-  problem: { border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' },
+  body: {
+    overflowY: 'auto', flex: 1, padding: '16px 20px',
+    display: 'flex', flexDirection: 'column', gap: 16,
+  },
+  problem: {
+    border: '1px solid #e2e8f0', borderRadius: 12,
+    overflow: 'visible',
+  },
   problemHeader: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+    borderRadius: '12px 12px 0 0',
   },
   problemTitle: { fontWeight: 700, fontSize: 15, color: '#1e293b' },
   problemScore: { fontWeight: 700, fontSize: 15 },
@@ -267,13 +264,28 @@ const fb = {
     borderRadius: 99, overflow: 'hidden',
   },
   progressFill: { height: '100%', borderRadius: 99, transition: 'width 0.3s' },
-  criteriaList: { padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
-  criterion: { background: '#f8fafc', borderRadius: 8, padding: '10px 12px' },
-  criterionTop: { display: 'flex', justifyContent: 'space-between', marginBottom: 5 },
-  criterionItem: { fontWeight: 600, fontSize: 13, color: '#374151' },
-  criterionScore: { fontWeight: 700, fontSize: 13 },
-  reason: { fontSize: 12, color: '#64748b', lineHeight: 1.6, margin: 0 },
-  aiFeedback: { margin: '0 16px 14px', background: '#eff6ff', borderRadius: 8, padding: '10px 12px' },
-  aiFeedbackLabel: { fontSize: 12, fontWeight: 600, color: '#2563eb', marginBottom: 5 },
-  aiFeedbackText: { fontSize: 12, color: '#374151', lineHeight: 1.7, margin: 0 },
+  criteriaList: { padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
+  criterion: {
+    background: '#f8fafc', borderRadius: 10, padding: '12px 14px',
+    border: '1px solid #f1f5f9',
+  },
+  criterionTop: {
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'flex-start', gap: 10, marginBottom: 6,
+  },
+  criterionItem: { fontWeight: 600, fontSize: 13, color: '#374151', flex: 1, wordBreak: 'break-word' },
+  criterionScore: { fontWeight: 700, fontSize: 13, flexShrink: 0, whiteSpace: 'nowrap' },
+  reason: {
+    fontSize: 13, color: '#475569', lineHeight: 1.7, margin: 0,
+    wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+  },
+  aiFeedback: {
+    margin: '0 16px 14px', background: '#eff6ff', borderRadius: 10, padding: '14px 16px',
+    border: '1px solid #dbeafe',
+  },
+  aiFeedbackLabel: { fontSize: 12, fontWeight: 700, color: '#2563eb', margin: '0 0 8px' },
+  aiFeedbackText: {
+    fontSize: 13, color: '#374151', lineHeight: 1.8, margin: 0,
+    wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+  },
 };

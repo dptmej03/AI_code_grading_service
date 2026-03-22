@@ -83,11 +83,10 @@ def extract_code_cells(nb: nbformat.NotebookNode) -> List[Dict[str, Any]]:
     """코드 셀 소스만 추출 (문제별 분리 없이 전체)."""
     cells = []
     for i, cell in enumerate(nb.cells):
-        if cell.cell_type == 'code' and cell.source.strip():
-            cells.append({
-                'index': i,
-                'source': cell.source
-            })
+        if cell.cell_type == 'code':
+            src = cell.source if isinstance(cell.source, str) else ''.join(cell.source)
+            if src.strip():
+                cells.append({'index': i, 'source': src})
     return cells
 
 
@@ -97,28 +96,80 @@ def parse_student_id_from_filename(filename: str) -> str:
     return name
 
 
+def _get_source(cell) -> str:
+    """셀 source를 항상 문자열로 반환 (list 또는 str 모두 처리)."""
+    src = cell.source
+    return src if isinstance(src, str) else ''.join(src)
+
+
 def split_notebook_by_problems(nb: nbformat.NotebookNode) -> Dict[int, List[Dict[str, Any]]]:
     """
-    마크다운 셀의 '## 문제 N' 또는 '# 문제 N' 패턴으로 문제별 셀 분리.
+    마크다운 셀의 문제 마커로 문제별 셀 분리.
+
+    전략:
+    - ## Q1. / ## 문제1 처럼 레벨2+ 헤더에 문제 번호가 있으면 그것만 사용.
+      이 경우 레벨1 헤더(# ...)는 섹션 구분자로 처리하여 current_problem을 리셋.
+      → # **문제1**, # 데이터 로드 등의 섹션 제목이 문제 코드로 오인되는 것을 방지.
+    - 레벨2+ 마커가 없으면 모든 레벨에서 문제 번호 탐색 (기존 동작 폴백).
+
     반환: {problem_id: [cell_dict, ...]}
     """
-    problems = {}
+    PROBLEM_RE = re.compile(r'(?:Q|문제|Problem|question)\s*[:#.]?\s*(\d+)', re.IGNORECASE)
+    LEVEL1_RE = re.compile(r'^#(?!#)')   # # 으로 시작하되 ## 는 아닌 것
+    LEVEL2_RE = re.compile(r'^#{2,}')   # ## 이상
+
+    # 레벨2+ 헤더에 문제 마커가 있는지 먼저 확인
+    has_level2_markers = False
+    for cell in nb.cells:
+        if cell.cell_type != 'markdown':
+            continue
+        src = _get_source(cell)
+        first_line = src.strip().split('\n')[0]
+        if LEVEL2_RE.match(first_line) and PROBLEM_RE.search(first_line):
+            has_level2_markers = True
+            break
+
+    problems: Dict[int, List[Dict[str, Any]]] = {}
     current_problem = 0
-    problem_cells = []
+    problem_cells: List[Dict[str, Any]] = []
 
     for cell in nb.cells:
         if cell.cell_type == 'markdown':
-            m = re.search(r'(?:문제|Problem|Q|question)\s*[:#\s]*(\d+)', cell.source, re.IGNORECASE)
-            if m:
-                if current_problem > 0:
-                    problems[current_problem] = problem_cells
-                current_problem = int(m.group(1))
-                problem_cells = []
+            src = _get_source(cell)
+            first_line = src.strip().split('\n')[0]
+
+            if has_level2_markers:
+                # 레벨1 헤더 → 섹션 구분자: 현재 문제 저장 후 리셋
+                if LEVEL1_RE.match(first_line):
+                    if current_problem > 0:
+                        problems[current_problem] = problem_cells
+                        problem_cells = []
+                        current_problem = 0
+                    continue
+
+                # 레벨2+ 헤더에서만 문제 번호 추출
+                if LEVEL2_RE.match(first_line):
+                    m = PROBLEM_RE.search(first_line)
+                    if m:
+                        if current_problem > 0:
+                            problems[current_problem] = problem_cells
+                        current_problem = int(m.group(1))
+                        problem_cells = []
+            else:
+                # 폴백: 모든 레벨에서 문제 번호 탐색
+                m = PROBLEM_RE.search(src)
+                if m:
+                    if current_problem > 0:
+                        problems[current_problem] = problem_cells
+                    current_problem = int(m.group(1))
+                    problem_cells = []
             continue
-        if cell.cell_type == 'code' and cell.source.strip():
-            if current_problem > 0:
+
+        if cell.cell_type == 'code':
+            src = _get_source(cell)
+            if src.strip() and current_problem > 0:
                 problem_cells.append({
-                    'source': cell.source,
+                    'source': src,
                     'outputs': cell.get('outputs', [])
                 })
 
