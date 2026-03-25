@@ -22,8 +22,8 @@ export default function ResultTable({ results, onSelectStudent }) {
     else { setSortField(field); setSortDir('desc'); }
   };
 
-  const Th = ({ label, field }) => (
-    <th style={th} onClick={() => field && toggleSort(field)} role={field ? 'button' : undefined}>
+  const Th = ({ label, field, isFirst }) => (
+    <th style={isFirst ? { ...th, ...thSticky } : th} onClick={() => field && toggleSort(field)} role={field ? 'button' : undefined}>
       {label} {field && sortField === field ? (sortDir === 'asc' ? '↑' : '↓') : ''}
     </th>
   );
@@ -40,7 +40,7 @@ export default function ResultTable({ results, onSelectStudent }) {
         <table style={s.table}>
           <thead>
             <tr style={{ background: '#f8fafc' }}>
-              <Th label="학번/이름" field="student_id" />
+              <Th label="학번/이름" field="student_id" isFirst />
               {allProblemIds.map(pid => (
                 <th key={pid} style={th}>문제{pid}</th>
               ))}
@@ -58,7 +58,7 @@ export default function ResultTable({ results, onSelectStudent }) {
               const ratioNum = parseFloat(ratio);
               return (
                 <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={td}>
+                  <td style={{ ...td, ...tdSticky }}>
                     <div style={{ fontWeight: 600, color: '#1e293b' }}>{student.student_id}</div>
                     <div style={{ fontSize: 11, color: '#94a3b8' }}>{student.filename}</div>
                   </td>
@@ -108,7 +108,9 @@ export default function ResultTable({ results, onSelectStudent }) {
 }
 
 const th = { padding: '12px 16px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' };
+const thSticky = { position: 'sticky', left: 0, background: '#f8fafc', zIndex: 11, borderRight: '1px solid #e2e8f0' };
 const td = { padding: '14px 16px', fontSize: 14, color: '#374151', verticalAlign: 'middle' };
+const tdSticky = { position: 'sticky', left: 0, background: '#fff', zIndex: 10, borderRight: '1px solid #f1f5f9' };
 const s = {
   search: { width: '100%', padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, marginBottom: 16, outline: 'none' },
   table: { width: '100%', borderCollapse: 'collapse' },
