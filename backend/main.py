@@ -29,10 +29,11 @@ from schemas import (
     StudentResult, SubjectCreate, SubjectResponse, HistorySessionItem, SubjectItemCreate
 )
 from services.notebook_service import (
-    extract_notebooks_from_zip, parse_student_id_from_filename
+    extract_notebooks_from_zip, parse_student_id_from_filename,
+    parse_notebook, split_notebook_by_problems
 )
 from services.grading_service import grade_student_notebook
-from services.llm_service import APIQuotaError
+from services.llm_service import APIQuotaError, generate_rubric_with_ai
 
 app = FastAPI(title="Jupyter Notebook 자동 채점 시스템", version="2.0.0")
 
@@ -256,6 +257,42 @@ async def delete_subject_item(
     db.delete(item)
     db.commit()
     return {"message": "항목이 삭제되었습니다"}
+
+
+# ─── Rubric Generation ────────────────────────────────────────────────────────
+
+@app.post("/grading/generate-rubric")
+async def generate_rubric(
+    answer_notebook: UploadFile = File(...),
+    total_score: float = Form(100.0),
+    exam_title: str = Form(""),
+    current_user=Depends(get_current_user),
+):
+    """정답 노트북을 분석하여 루브릭 JSON을 자동 생성합니다."""
+    answer_bytes = await answer_notebook.read()
+
+    try:
+        nb = parse_notebook(answer_bytes)
+        problems = split_notebook_by_problems(nb)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"노트북 파싱 오류: {str(e)}")
+
+    if not problems:
+        raise HTTPException(status_code=400, detail="노트북에서 문제를 찾을 수 없습니다. 마크다운 셀에 Q1, Q2 등의 문제 마커가 필요합니다.")
+
+    try:
+        rubric = await generate_rubric_with_ai(
+            answer_problems=problems,
+            total_score=total_score,
+            exam_title=exam_title,
+        )
+        return rubric
+    except APIQuotaError:
+        raise HTTPException(status_code=429, detail="OpenAI API 사용량이 초과되었습니다.")
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"루브릭 생성 실패: {str(e)}")
 
 
 # ─── Grading ───────────────────────────────────────────────────────────────────
@@ -690,6 +727,7 @@ async def download_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename=grading_results_{session_id[:8]}.xlsx"}
     )
+
 
 
 @app.get("/health")
