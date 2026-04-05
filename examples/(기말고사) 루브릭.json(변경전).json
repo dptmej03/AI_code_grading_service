@@ -1,0 +1,157 @@
+{
+    "exam_title": "기말고사 데이터 분석 (이름_학번)",
+    "global_evaluation_guideline": "모든 문항 공통: 학생의 코드에서 런타임 에러(Exception)가 발생하는 경우, 해당 문항은 부분 점수 없이 무조건 0점 처리하세요. 에러 없이 정상 실행되고 요구되는 시각화 및 결과값을 출력한다면 구현 방식에 관계없이 만점을 부여합니다.",
+    "problems": [
+        {
+            "problem_id": "Q1",
+            "full_score": 4.25,
+            "evaluation_guideline": "결측치가 존재하는 4개의 변수(age, chol, thalach, oldpeak)와 각각의 결측치 개수를 정확히 탐색하여 출력함",
+            "partial_score_criteria": [
+                {
+                    "item": "가이드라인에 부합 시",
+                    "score": 4.25
+                }
+            ]
+        },
+        {
+            "problem_id": "Q2",
+            "full_score": 4.25,
+            "evaluation_guideline": "데이터 원본을 복사하고 그룹별 평균값으로 결측치를 정확하게 수정한 뒤, 최종 결측치 개수를 확인",
+            "partial_score_criteria": [
+                {
+                    "item": "가이드라인에 부합 시",
+                    "score": 4.25
+                }
+            ]
+        },
+        {
+            "problem_id": "Q3",
+            "full_score": 4.25,
+            "evaluation_guideline": "chol 열 기준 오름차순 정렬하고 정렬 결과의 상위 5개 행 출력",
+            "partial_score_criteria": [
+                {
+                    "item": "가이드라인에 부합 시",
+                    "score": 4.25
+                }
+            ]
+        },
+        {
+            "problem_id": "Q4",
+            "full_score": 4.25,
+            "evaluation_guideline": "sex, cp, target 세 변수 범주형 변수로 변환 및 데이터타입 확인",
+            "partial_score_criteria": [
+                {
+                    "item": "가이드라인에 부합 시",
+                    "score": 4.25
+                }
+            ]
+        },
+        {
+            "problem_id": "Q5",
+            "full_score": 4.25,
+            "evaluation_guideline": "조건에 맞는 데이터 집계 및 최다 빈도 탐색",
+            "partial_score_criteria": [
+                {
+                    "item": "가이드라인에 부합 시",
+                    "score": 4.25
+                }
+            ]
+        },
+        {
+            "problem_id": "Q6",
+            "full_score": 5,
+            "evaluation_guideline": "3개의 연속형 변수 각각의 히스토그램 시각화 (조건 5개 만족)",
+            "partial_score_criteria": [
+                {
+                    "item": "그래프 크기(8,5) 로 출력할 것",
+                    "score": 1
+                },
+                {
+                    "item": "코드 한 셀에 그래프 하나가 출력되도록 할 것",
+                    "score": 1
+                },
+                {
+                    "item": "각 변수에 대해 bins는 15, 투명도는 0.5, edgecolor는 navy로 설정",
+                    "score": 1
+                },
+                {
+                    "item": "각 변수에 맞는 올바른 색상(Age-pink, Annual_income-blue, spending_score-skyblue) 만족",
+                    "score": 1
+                },
+                {
+                    "item": "요구하는 그래프 라벨을 정상적으로 표시함",
+                    "score": 1
+                }
+            ]
+        },
+        {
+            "problem_id": "Q7",
+            "full_score": 5,
+            "evaluation_guideline": "연속형 수치 데이터 간 상관관계 히트맵 작성",
+            "partial_score_criteria": [
+                {
+                    "item": "seaborn 라이브러리를 불러왔고, 아래 조건에 맞는 두 개의 시각화를 1행 2열로 나란히 출력",
+                    "score": 1
+                },
+                {
+                    "item": "전체 그래프 크기는 (15, 5) 로 설정",
+                    "score": 0.5
+                },
+                {
+                    "item": "스타일 테마는 'white'로 설정",
+                    "score": 0.5
+                },
+                {
+                    "item": "첫번째 그래프는 히스토그램으로 그리되, 그 위에 밀도 추정선을 추가하시오",
+                    "score": 1
+                },
+                {
+                    "item": "첫번째 히스토그램에 성별에 따라 색상이 다르게 표시되도록 설정하시오",
+                    "score": 1
+                },
+                {
+                    "item": "두번째 그래프는 바이올린 그림을 이용하여 연령 분포를 성별에 따라 시각화하시오",
+                    "score": 1
+                }
+            ]
+        },
+        {
+            "problem_id": "Q8",
+            "full_score": 4.25,
+            "evaluation_guideline": "연속형 변수들의 모든 쌍벌 관계를 보여주는 서브플롯 그리드(Pairplot) 작성",
+            "partial_score_criteria": [
+                {
+                    "item": "가이드라인에 부합 시",
+                    "score": 4.25
+                }
+            ]
+        },
+        {
+            "problem_id": "Q9",
+            "full_score": 4.5,
+            "evaluation_guideline": "두 개의 시각화 함수(Boxplot, Stripplot) 중첩 렌더링. 세부 파라미터 체크",
+            "partial_score_criteria": [
+                {
+                    "item": "성별을 기준으로 나눔, pastel 계열 팔레트 적용",
+                    "score": 1
+                },
+                {
+                    "item": "Stripplot: 색상 gray, 모양은 사각형(s)",
+                    "score": 1
+                },
+                {
+                    "item": "Stripplot: 겹침 방지 지터 설정",
+                    "score": 1
+                },
+                {
+                    "item": "Stripplot: 투명도 0.5로 설정",
+                    "score": 0.5
+                },
+                {
+                    "item": "전체 제목(Title)을 'Annual Income by Gender with Stripplot'으로 설정함",
+                    "score": 1
+                }
+            ]
+        }
+    ]
+}
