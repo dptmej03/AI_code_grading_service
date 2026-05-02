@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import traceback
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from openai import AsyncOpenAI
@@ -128,6 +129,7 @@ async def generate_rubric_with_ai(
     except json.JSONDecodeError as e:
         raise ValueError(f"AI 응답 JSON 파싱 오류: {str(e)}\n응답 내용: {content[:500]}")
     except Exception as e:
+        print(f"[ERROR] 루브릭 생성 오류:\n{traceback.format_exc()}")
         raise RuntimeError(f"루브릭 생성 중 오류: [{type(e).__name__}] {str(e)}")
 
 
