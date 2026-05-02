@@ -16,8 +16,8 @@ class APIQuotaError(Exception):
 
 
 def get_openai_client() -> AsyncOpenAI:
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    base_url = os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    base_url = (os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").strip()
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(120.0, connect=30.0),
         limits=httpx.Limits(max_connections=20, max_keepalive_connections=5),
