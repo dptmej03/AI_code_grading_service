@@ -25,6 +25,33 @@ function StatusBadge({ status }) {
   );
 }
 
+function ModelBadge({ model }) {
+  // model: "openai/gpt-4o-mini" | "fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct"
+  const [provider, ...rest] = model.split('/');
+  const modelName = rest.join('/');
+  // 긴 fireworks 경로는 마지막 segment만 표시
+  const shortName = provider === 'fireworks'
+    ? modelName.split('/').pop()
+    : modelName;
+  const cfg = provider === 'fireworks'
+    ? { bg: '#fef3c7', color: '#b45309' }
+    : { bg: '#dbeafe', color: '#1d4ed8' };
+  return (
+    <span
+      title={model}
+      style={{
+        background: cfg.bg, color: cfg.color, borderRadius: 6,
+        padding: '3px 8px', fontSize: 11, fontWeight: 600,
+        fontFamily: 'monospace', whiteSpace: 'nowrap',
+        maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis',
+        display: 'inline-block',
+      }}
+    >
+      {shortName}
+    </span>
+  );
+}
+
 export default function HistoryPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -114,6 +141,7 @@ export default function HistoryPage() {
           <span style={s.headerTitle}>📚 채점 기록</span>
         </div>
         <div style={s.headerRight}>
+          <button style={s.revisionBtn} onClick={() => navigate('/revisions')}>📝 수정 로그</button>
           <span style={s.userName}>{user?.username}</span>
           <button style={s.logoutBtn} onClick={logout}>로그아웃</button>
         </div>
@@ -165,6 +193,7 @@ export default function HistoryPage() {
                       <th style={th}>세부 항목</th>
                       <th style={{ ...th, textAlign: 'center' }}>학생 수</th>
                       <th style={th}>완료 시간</th>
+                      <th style={{ ...th, textAlign: 'center' }}>채점 AI</th>
                       <th style={{ ...th, textAlign: 'center' }}>결과 보기</th>
                       <th style={{ ...th, textAlign: 'center' }}>삭제</th>
                     </tr>
@@ -188,6 +217,13 @@ export default function HistoryPage() {
                         </td>
                         <td style={{ ...td, color: '#64748b', fontSize: 13 }}>
                           {session.completed_at ? formatDate(session.completed_at) : '-'}
+                        </td>
+                        <td style={{ ...td, textAlign: 'center' }}>
+                          {session.grading_model ? (
+                            <ModelBadge model={session.grading_model} />
+                          ) : (
+                            <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>
+                          )}
                         </td>
                         <td style={{ ...td, textAlign: 'center' }}>
                           <button
@@ -302,6 +338,10 @@ const s = {
   headerRight: { display: 'flex', alignItems: 'center', gap: 16 },
   userName: { fontSize: 14, color: '#64748b' },
   logoutBtn: { background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: '#64748b' },
+  revisionBtn: {
+    background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6,
+    padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: '#92400e', fontWeight: 500,
+  },
   main: { maxWidth: 1000, margin: '0 auto', padding: '32px 24px' },
   filterBar: { display: 'flex', gap: 12, marginBottom: 28 },
   search: { flex: 1, padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 8, fontSize: 14, outline: 'none' },

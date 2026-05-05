@@ -144,6 +144,9 @@ def split_notebook_by_problems(nb: nbformat.NotebookNode) -> Dict[int, Dict[str,
     QUESTION_RE = re.compile(r'(?:Q|Problem|question)\s*[:#.]?\s*(\d+)', re.IGNORECASE)
     LEVEL1_RE = re.compile(r'^#(?!#)')   # # 으로 시작하되 ## 는 아닌 것
     LEVEL2_RE = re.compile(r'^#{2,}')   # ## 이상
+    # 학생 답변 마커: **[Q1 답변]**, **[A1]** 같은 별표+대괄호 패턴
+    # → 안에 문제 마커(Q1 등)가 있어도 학생 답변 셀로 인식하여 표시
+    ANSWER_MARKER_RE = re.compile(r'\*\*\[.+?\]\*\*')
 
     # 레벨1 헤더에 Q1/Q2 같은 문제 마커가 있는지 확인 (신규 포맷 감지)
     # "# **문제1**" 같은 섹션 제목은 제외 — Q/question 키워드만 인정
@@ -207,11 +210,19 @@ def split_notebook_by_problems(nb: nbformat.NotebookNode) -> Dict[int, Dict[str,
                             problem_cells.append({'source': src, 'outputs': [], 'cell_type': 'markdown'})
                     continue
 
-                # 그 외 마크다운 → 학생 답변 등, 설명에 누적 + 표시용 셀로도 저장
+                # 그 외 마크다운 → 학생 답변 등
                 if current_problem > 0:
-                    problem_description += "\n\n" + src.strip()
-                    if not PROBLEM_RE.search(src):
-                        problem_cells.append({'source': src, 'outputs': [], 'cell_type': 'markdown'})
+                    if ANSWER_MARKER_RE.search(src):
+                        # **[Q1 답변]** 같은 학생 답변 셀: 문제 마커 포함 여부 무관하게 표시,
+                        # 학생 답변이므로 problem_description(문제 설명)에는 누적하지 않음
+                        problem_cells.append({
+                            'source': src, 'outputs': [], 'cell_type': 'markdown',
+                            'is_student_answer': True,
+                        })
+                    else:
+                        problem_description += "\n\n" + src.strip()
+                        if not PROBLEM_RE.search(src):
+                            problem_cells.append({'source': src, 'outputs': [], 'cell_type': 'markdown'})
                 continue
 
             elif cell.cell_type == 'code':
@@ -282,9 +293,15 @@ def split_notebook_by_problems(nb: nbformat.NotebookNode) -> Dict[int, Dict[str,
                         problem_description = src.strip()
                         continue  # 문제 헤더는 problem_cells에 추가하지 않음
 
-                # 문제 마커 없는 마크다운만 표시용 셀로 저장
-                if current_problem > 0 and not PROBLEM_RE.search(src):
-                    problem_cells.append({'source': src, 'outputs': [], 'cell_type': 'markdown'})
+                # 학생 답변 셀(**[...]**)은 문제 마커 포함 여부와 무관하게 표시
+                if current_problem > 0:
+                    if ANSWER_MARKER_RE.search(src):
+                        problem_cells.append({
+                            'source': src, 'outputs': [], 'cell_type': 'markdown',
+                            'is_student_answer': True,
+                        })
+                    elif not PROBLEM_RE.search(src):
+                        problem_cells.append({'source': src, 'outputs': [], 'cell_type': 'markdown'})
                 continue
 
             elif cell.cell_type == 'code':
