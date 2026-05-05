@@ -34,14 +34,7 @@ def parse_model_id(model: Optional[str]) -> Tuple[str, str]:
     if "/" not in model:
         return "openai", model
     provider, _, model_name = model.partition("/")
-    provider = provider.lower()
-
-    # Fireworks 모델은 마지막 segment만 API에 전달
-    # 'fireworks/accounts/fireworks/models/deepseek-v3' → 'deepseek-v3'
-    if provider == "fireworks":
-        model_name = model.split("/")[-1]
-
-    return provider, model_name
+    return provider.lower(), model_name
 
 
 def get_openai_client() -> AsyncOpenAI:
@@ -64,6 +57,7 @@ def get_llm_client(model: str) -> Tuple[AsyncOpenAI, str]:
         base_url = (os.getenv("FIREWORKS_BASE_URL") or "https://api.fireworks.ai/inference/v1").strip()
         if not api_key:
             raise RuntimeError("FIREWORKS_API_KEY 환경변수가 설정되지 않았습니다")
+        print(f"[Fireworks] base_url={base_url!r} | model_name={model_name!r} | key_prefix={api_key[:8]!r}")
         return _build_client(api_key=api_key, base_url=base_url), model_name
     # default: openai
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
