@@ -93,6 +93,9 @@ async def _call_with_retry(coro_fn, max_retries: int = 3):
             print(f"[Retry] RateLimitError 발생 (시도 {attempt + 1}/{max_retries}). {delay}초 후 재시도...")
             await asyncio.sleep(delay)
             delay *= 2
+        except Exception as e:
+            print(f"[ERROR] LLM API 호출 실패 (시도 {attempt + 1}): {type(e).__name__}: {e}")
+            raise
 
 
 def _load_rubric_guide() -> str:
@@ -405,6 +408,7 @@ async def grade_with_ai(
         raise
 
     except Exception as e:
+        print(f"[ERROR] grade_with_ai 실패 (model={model}):\n{traceback.format_exc()}")
         return [
             {
                 "item": c.item,
