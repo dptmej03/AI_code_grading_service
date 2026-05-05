@@ -57,7 +57,7 @@ def get_llm_client(model: str) -> Tuple[AsyncOpenAI, str]:
         base_url = (os.getenv("FIREWORKS_BASE_URL") or "https://api.fireworks.ai/inference/v1").strip()
         if not api_key:
             raise RuntimeError("FIREWORKS_API_KEY 환경변수가 설정되지 않았습니다")
-        print(f"[Fireworks] base_url={base_url!r} | model_name={model_name!r} | key_prefix={api_key[:8]!r}")
+        print(f"[Fireworks] base_url={base_url!r} | model_name={model_name!r} | key_set={bool(api_key)}")
         return _build_client(api_key=api_key, base_url=base_url), model_name
     # default: openai
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
