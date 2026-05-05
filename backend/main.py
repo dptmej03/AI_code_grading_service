@@ -97,6 +97,7 @@ def seed_database():
         # 기본 시스템 설정 시드
         default_settings = {
             "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
+            "fireworks_api_key": os.getenv("FIREWORKS_API_KEY", ""),
             "llm_model": "gpt-4o-mini",
             "base_system_prompt": "",
             "max_upload_size_mb": "50",
@@ -110,10 +111,31 @@ def seed_database():
         db.close()
 
 
+def _migrate_add_columns():
+    """기존 테이블에 누락된 컬럼을 ALTER TABLE로 추가 (PostgreSQL/SQLite 호환)."""
+    from sqlalchemy import text, inspect
+    inspector = inspect(engine)
+    migrations = [
+        ("grading_sessions_db", "grading_model", "VARCHAR(200)"),
+    ]
+    with engine.begin() as conn:
+        for table_name, col_name, col_type in migrations:
+            try:
+                if not inspector.has_table(table_name):
+                    continue
+                existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+                if col_name not in existing_cols:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"))
+                    print(f"[Migration] Added column {table_name}.{col_name}")
+            except Exception as e:
+                print(f"[Migration] {table_name}.{col_name} 추가 실패 (이미 존재할 수 있음): {e}")
+
+
 @app.on_event("startup")
 async def startup():
     try:
         models.Base.metadata.create_all(bind=engine)
+        _migrate_add_columns()
         seed_database()
     except Exception as e:
         print(f"Warning: Database initialization failed: {str(e)}")
@@ -311,6 +333,25 @@ async def delete_subject_item(
     return {"message": "항목이 삭제되었습니다"}
 
 
+# ─── LLM 모델 목록 ─────────────────────────────────────────────────────────────
+
+@app.get("/grading/available-models")
+async def list_available_models(current_user=Depends(get_current_user)):
+    """채점에 사용 가능한 LLM 모델 목록 반환. 환경변수에 키가 있는 provider만 노출."""
+    from services.llm_service import AVAILABLE_MODELS, DEFAULT_MODEL
+    has_openai = bool(os.getenv("OPENAI_API_KEY", "").strip())
+    has_fireworks = bool(os.getenv("FIREWORKS_API_KEY", "").strip())
+    available = []
+    for m in AVAILABLE_MODELS:
+        provider = m.get("provider", "openai")
+        if provider == "openai" and not has_openai:
+            continue
+        if provider == "fireworks" and not has_fireworks:
+            continue
+        available.append(m)
+    return {"models": available, "default": DEFAULT_MODEL}
+
+
 # ─── Rubric Generation ────────────────────────────────────────────────────────
 
 @app.post("/grading/generate-rubric")
@@ -357,6 +398,7 @@ async def start_grading(
     criteria_file: UploadFile = File(...),
     subject_id: Optional[int] = Form(None),
     subject_item_id: Optional[int] = Form(None),
+    grading_model: Optional[str] = Form(None),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -393,6 +435,12 @@ async def start_grading(
     )
     grading_sessions[session_id] = session
 
+    # 모델 ID 정규화 (None/빈문자 → 기본값)
+    from services.llm_service import DEFAULT_MODEL, AVAILABLE_MODELS
+    valid_model_ids = {m["id"] for m in AVAILABLE_MODELS}
+    if not grading_model or grading_model not in valid_model_ids:
+        grading_model = DEFAULT_MODEL
+
     # Persist initial record to DB
     db_record = models.GradingSessionDB(
         id=session_id,
@@ -402,6 +450,7 @@ async def start_grading(
         status="running",
         total_students=len(student_notebooks),
         processed_students=0,
+        grading_model=grading_model,
     )
     db.add(db_record)
     db.commit()
@@ -409,7 +458,7 @@ async def start_grading(
     background_tasks.add_task(
         run_grading_session,
         session_id, answer_bytes, student_notebooks, criteria,
-        subject_id, current_user["id"]
+        subject_id, current_user["id"], grading_model
     )
 
     return {"session_id": session_id, "total_students": len(student_notebooks)}
@@ -442,6 +491,7 @@ async def run_grading_session(
     criteria: GradingCriteria,
     subject_id: Optional[int] = None,
     user_id: Optional[int] = None,
+    grading_model: Optional[str] = None,
 ):
     session = grading_sessions[session_id]
     session.status = "running"
@@ -456,7 +506,8 @@ async def run_grading_session(
                 student_nb_content=content,
                 answer_nb_content=answer_bytes,
                 criteria=criteria,
-                execute=False
+                execute=False,
+                model=grading_model,
             )
             total_score = sum(p.obtained_score for p in problem_results)
             max_total = sum(p.full_score for p in problem_results)
@@ -672,6 +723,7 @@ async def get_history(
             "status": r.status,
             "total_students": r.total_students,
             "processed_students": r.processed_students,
+            "grading_model": r.grading_model,
             "created_at": r.created_at.isoformat() if r.created_at else "",
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
         })
@@ -917,6 +969,71 @@ async def get_revision_logs(
             "new_value": log.new_value,
             "revised_by_username": user.username if user else None,
             "revised_at": log.revised_at.isoformat(),
+        })
+    return result
+
+
+@app.get("/grading/all-revisions")
+async def get_all_revision_logs(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """현재 교수가 본인 채점 세션에서 수행한 모든 수정 이력을 반환 (최신순).
+    세션 메타데이터(과목명, 항목명)와 함께 반환."""
+    # 본인이 채점한 세션 ID 목록
+    my_session_ids = [
+        r.id for r in db.query(models.GradingSessionDB)
+        .filter(models.GradingSessionDB.user_id == current_user["id"])
+        .all()
+    ]
+    if not my_session_ids:
+        return []
+
+    logs = (
+        db.query(models.ProblemRevisionLog)
+        .filter(models.ProblemRevisionLog.session_id.in_(my_session_ids))
+        .order_by(models.ProblemRevisionLog.revised_at.desc())
+        .limit(500)
+        .all()
+    )
+
+    # 세션 메타데이터 캐시
+    sessions_map = {
+        r.id: r for r in db.query(models.GradingSessionDB)
+        .filter(models.GradingSessionDB.id.in_(my_session_ids))
+        .all()
+    }
+
+    # 사용자 캐시
+    user_ids = {log.revised_by for log in logs}
+    users_map = {
+        u.id: u.username for u in db.query(models.User)
+        .filter(models.User.id.in_(user_ids)).all()
+    } if user_ids else {}
+
+    # 세부 항목명 캐시
+    item_ids = {s.subject_item_id for s in sessions_map.values() if s.subject_item_id}
+    items_map = {
+        i.id: i.name for i in db.query(models.SubjectItem)
+        .filter(models.SubjectItem.id.in_(item_ids)).all()
+    } if item_ids else {}
+
+    result = []
+    for log in logs:
+        sess = sessions_map.get(log.session_id)
+        result.append({
+            "id": log.id,
+            "session_id": log.session_id,
+            "subject_name": (sess.subject.name if sess and sess.subject else None),
+            "subject_item_name": (items_map.get(sess.subject_item_id) if sess else None),
+            "student_filename": log.student_filename,
+            "problem_id": log.problem_id,
+            "field_name": log.field_name,
+            "partial_score_index": log.partial_score_index,
+            "old_value": log.old_value,
+            "new_value": log.new_value,
+            "revised_by_username": users_map.get(log.revised_by),
+            "revised_at": log.revised_at.isoformat() if log.revised_at else "",
         })
     return result
 
@@ -1325,7 +1442,7 @@ async def admin_update_settings(
     db: Session = Depends(get_db)
 ):
     """시스템 설정 업데이트."""
-    allowed_keys = {"openai_api_key", "llm_model", "base_system_prompt", "max_upload_size_mb"}
+    allowed_keys = {"openai_api_key", "fireworks_api_key", "llm_model", "base_system_prompt", "max_upload_size_mb"}
     for key, value in body.items():
         if key not in allowed_keys:
             continue
@@ -1335,9 +1452,11 @@ async def admin_update_settings(
         else:
             db.add(models.SystemSetting(key=key, value=str(value)))
 
-        # API 키가 변경되면 환경변수도 업데이트
+        # API 키가 변경되면 환경변수도 즉시 갱신
         if key == "openai_api_key" and value:
             os.environ["OPENAI_API_KEY"] = str(value)
+        elif key == "fireworks_api_key" and value:
+            os.environ["FIREWORKS_API_KEY"] = str(value)
 
     db.commit()
     return {"message": "설정이 저장되었습니다"}
@@ -1365,6 +1484,7 @@ async def admin_list_sessions(
             "status": r.status,
             "total_students": r.total_students,
             "processed_students": r.processed_students,
+            "grading_model": r.grading_model,
             "created_at": r.created_at.isoformat() if r.created_at else "",
             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
         })

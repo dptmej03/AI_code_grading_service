@@ -5,6 +5,7 @@ import RegisterPage from './pages/RegisterPage';
 import UploadPage from './pages/UploadPage';
 import DashboardPage from './pages/DashboardPage';
 import HistoryPage from './pages/HistoryPage';
+import RevisionLogPage from './pages/RevisionLogPage';
 import AdminPage from './pages/AdminPage';
 import { authAPI } from './services/api';
 
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
           <Route path="/upload" element={<PrivateRoute><UploadPage /></PrivateRoute>} />
           <Route path="/history" element={<PrivateRoute><HistoryPage /></PrivateRoute>} />
+          <Route path="/revisions" element={<PrivateRoute><RevisionLogPage /></PrivateRoute>} />
           <Route path="/dashboard/:sessionId" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
           <Route path="*" element={<Navigate to={user ? (user.role === 'admin' ? "/admin" : "/upload") : "/login"} replace />} />
         </Routes>
