@@ -200,6 +200,30 @@ function SessionsTab({ sessions }) {
     if (s === 'quota_exceeded') return '#dc2626';
     return '#64748b';
   };
+  const renderModel = (model) => {
+    if (!model) return <span style={{ color: '#cbd5e1' }}>—</span>;
+    const [provider, ...rest] = model.split('/');
+    const shortName = provider === 'fireworks'
+      ? rest.join('/').split('/').pop()
+      : rest.join('/');
+    const cfg = provider === 'fireworks'
+      ? { bg: '#fef3c7', color: '#b45309' }
+      : { bg: '#dbeafe', color: '#1d4ed8' };
+    return (
+      <span
+        title={model}
+        style={{
+          background: cfg.bg, color: cfg.color, borderRadius: 4,
+          padding: '2px 6px', fontSize: 11, fontWeight: 600,
+          fontFamily: 'monospace', whiteSpace: 'nowrap',
+          maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
+          display: 'inline-block',
+        }}
+      >
+        {shortName}
+      </span>
+    );
+  };
   return (
     <div>
       <table style={c.table}>
@@ -210,6 +234,7 @@ function SessionsTab({ sessions }) {
             <th style={c.th}>상태</th>
             <th style={c.th}>학생수</th>
             <th style={c.th}>처리완료</th>
+            <th style={c.th}>채점 AI</th>
             <th style={c.th}>생성일</th>
           </tr>
         </thead>
@@ -221,6 +246,7 @@ function SessionsTab({ sessions }) {
               <td style={c.td}><span style={{ color: statusColor(s.status), fontWeight: 600 }}>{s.status}</span></td>
               <td style={c.td}>{s.total_students}</td>
               <td style={c.td}>{s.processed_students}</td>
+              <td style={c.td}>{renderModel(s.grading_model)}</td>
               <td style={c.td}>{s.created_at?.slice(0, 16).replace('T', ' ')}</td>
             </tr>
           ))}
@@ -235,6 +261,7 @@ function SessionsTab({ sessions }) {
 function SettingsTab({ settings, onSave }) {
   const [form, setForm] = useState({
     openai_api_key: '',
+    fireworks_api_key: '',
     llm_model: 'gpt-4o-mini',
     base_system_prompt: '',
     max_upload_size_mb: '50',
@@ -253,6 +280,9 @@ function SettingsTab({ settings, onSave }) {
       const payload = { ...form };
       if (payload.openai_api_key && payload.openai_api_key.includes('...')) {
         delete payload.openai_api_key;
+      }
+      if (payload.fireworks_api_key && payload.fireworks_api_key.includes('...')) {
+        delete payload.fireworks_api_key;
       }
       await adminAPI.updateSettings(payload);
       setMsg('설정이 저장되었습니다');
@@ -278,6 +308,17 @@ function SettingsTab({ settings, onSave }) {
             placeholder="sk-..."
           />
           <span style={c.formHint}>변경하지 않으려면 그대로 두세요</span>
+        </div>
+        <div style={c.formField}>
+          <label style={c.formLabel}>Fireworks API Key</label>
+          <input
+            style={c.formInput}
+            type="password"
+            value={form.fireworks_api_key}
+            onChange={e => setForm({ ...form, fireworks_api_key: e.target.value })}
+            placeholder="fw-..."
+          />
+          <span style={c.formHint}>Llama / Qwen / DeepSeek 등 Fireworks 모델 사용 시 필요 (없으면 비워두기)</span>
         </div>
         <div style={c.formField}>
           <label style={c.formLabel}>LLM 모델</label>

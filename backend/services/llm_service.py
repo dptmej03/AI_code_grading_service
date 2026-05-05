@@ -15,9 +15,58 @@ class APIQuotaError(Exception):
     pass
 
 
+DEFAULT_MODEL = "openai/gpt-4o-mini"
+
+# 사용 가능한 모델 목록 (provider/model_id 형식)
+AVAILABLE_MODELS = [
+    {"id": "openai/gpt-4o-mini", "label": "GPT-4o mini (빠르고 저렴)", "provider": "openai"},
+    {"id": "openai/gpt-4o", "label": "GPT-4o (정확도 ↑)", "provider": "openai"},
+    {"id": "openai/gpt-4.1-mini", "label": "GPT-4.1 mini", "provider": "openai"},
+    {"id": "fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct", "label": "Llama 3.1 70B (Fireworks)", "provider": "fireworks"},
+    {"id": "fireworks/accounts/fireworks/models/qwen2p5-coder-32b-instruct", "label": "Qwen2.5 Coder 32B (Fireworks, 코딩 특화)", "provider": "fireworks"},
+    {"id": "fireworks/accounts/fireworks/models/deepseek-v3", "label": "DeepSeek V3 (Fireworks, 추론 강함)", "provider": "fireworks"},
+]
+
+
+def parse_model_id(model: Optional[str]) -> Tuple[str, str]:
+    """'openai/gpt-4o-mini' → ('openai', 'gpt-4o-mini'). prefix 없으면 openai로 간주."""
+    model = (model or DEFAULT_MODEL).strip()
+    if "/" not in model:
+        return "openai", model
+    provider, _, model_name = model.partition("/")
+    return provider.lower(), model_name
+
+
 def get_openai_client() -> AsyncOpenAI:
+    """기본 OpenAI 클라이언트 (이전 호환성용)."""
+    return _build_client(
+        api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        base_url=(os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").strip(),
+    )
+
+
+def get_llm_client(model: str) -> Tuple[AsyncOpenAI, str]:
+    """
+    모델 ID('openai/...' 또는 'fireworks/...')를 받아서
+    적절한 provider 클라이언트와 실제 모델명을 반환.
+    Fireworks도 OpenAI 호환 API를 제공하므로 AsyncOpenAI 클라이언트 재사용.
+    """
+    provider, model_name = parse_model_id(model)
+    if provider == "fireworks":
+        api_key = os.getenv("FIREWORKS_API_KEY", "").strip()
+        base_url = (os.getenv("FIREWORKS_BASE_URL") or "https://api.fireworks.ai/inference/v1").strip()
+        if not api_key:
+            raise RuntimeError("FIREWORKS_API_KEY 환경변수가 설정되지 않았습니다")
+        return _build_client(api_key=api_key, base_url=base_url), model_name
+    # default: openai
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     base_url = (os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1").strip()
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다")
+    return _build_client(api_key=api_key, base_url=base_url), model_name
+
+
+def _build_client(api_key: str, base_url: str) -> AsyncOpenAI:
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(120.0, connect=30.0),
         limits=httpx.Limits(max_connections=20, max_keepalive_connections=5),
@@ -58,6 +107,7 @@ async def generate_rubric_with_ai(
     answer_problems: Dict[int, Dict[str, Any]],
     total_score: float = 100.0,
     exam_title: str = "",
+    model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     정답 노트북의 문제별 코드를 분석하여 루브릭 JSON을 자동 생성합니다.
@@ -111,11 +161,11 @@ async def generate_rubric_with_ai(
 
 위 문제들의 정답 코드를 분석하여, 가이드라인에 맞는 루브릭 JSON을 생성하세요."""
 
-    client = get_openai_client()
+    client, model_name = get_llm_client(model or DEFAULT_MODEL)
 
     try:
         response = await _call_with_retry(lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model_name,
             max_tokens=4096,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -154,7 +204,8 @@ async def grade_with_ai(
     execution_output: Optional[str] = None,
     global_evaluation_guideline: Optional[str] = None,
     full_score: Optional[float] = None,
-    remaining_score: Optional[float] = None
+    remaining_score: Optional[float] = None,
+    model: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], str, int]:
     """
     GPT-4o를 사용하여 채점 기준 기반 부분 점수 제도로 평가합니다.
@@ -287,11 +338,11 @@ async def grade_with_ai(
 위의 평가 가이드라인과 루브릭에 기반하여 학생 코드를 평가하세요.
 모범 답안의 구현 방식과 다르더라도, 문제를 올바르게 해결했고 기준들을 충족한다면 정답으로 인정하세요."""
 
-    client = get_openai_client()
+    client, model_name = get_llm_client(model or DEFAULT_MODEL)
 
     try:
         response = await _call_with_retry(lambda: client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model_name,
             max_tokens=2048,
             messages=[
                 {"role": "system", "content": system_prompt},

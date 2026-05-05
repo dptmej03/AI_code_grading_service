@@ -57,6 +57,14 @@ function NotebookPanel({ student }) {
               let codeIdx = 0;
               return problem.code_cells.map((cell, idx) => {
                 if (cell.cell_type === 'markdown') {
+                  if (cell.is_student_answer) {
+                    return (
+                      <div key={idx} style={nb.answerCell}>
+                        <div style={nb.answerLabel}>📝 학생 답변</div>
+                        <pre style={nb.answerText}>{cell.source}</pre>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={idx} style={nb.markdownCell}>
                       <pre style={nb.markdownText}>{cell.source}</pre>
@@ -477,6 +485,22 @@ const nb = {
     margin: 0, padding: '10px 14px',
     fontSize: 13, fontFamily: 'inherit',
     color: '#f5c2e7', lineHeight: 1.7,
+    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+  },
+  answerCell: {
+    border: '1px solid #74c7ec', borderRadius: 8,
+    marginBottom: 10, overflow: 'hidden',
+    background: '#1e3a5f',
+  },
+  answerLabel: {
+    fontSize: 11, fontWeight: 700, color: '#74c7ec',
+    background: '#1e293b', padding: '6px 14px',
+    borderBottom: '1px solid #314056', letterSpacing: 0.5,
+  },
+  answerText: {
+    margin: 0, padding: '10px 14px',
+    fontSize: 13, fontFamily: 'inherit',
+    color: '#cdd6f4', lineHeight: 1.7,
     whiteSpace: 'pre-wrap', wordBreak: 'break-word',
   },
   empty: {

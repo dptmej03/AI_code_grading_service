@@ -373,6 +373,10 @@ export default function UploadPage() {
   const [newItemName, setNewItemName] = useState('');
   const [itemLoading, setItemLoading] = useState(false);
 
+  // 채점 모델 선택 state
+  const [availableModels, setAvailableModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
+
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -380,6 +384,11 @@ export default function UploadPage() {
     subjectAPI.list().then(res => {
       setSubjects(res.data);
       if (res.data.length > 0) setSelectedSubjectId(String(res.data[0].id));
+    }).catch(() => { });
+
+    gradingAPI.getAvailableModels().then(res => {
+      setAvailableModels(res.data.models || []);
+      setSelectedModel(res.data.default || '');
     }).catch(() => { });
   }, []);
 
@@ -478,6 +487,7 @@ export default function UploadPage() {
       fd.append('criteria_file', criteriaFile);
       if (selectedSubjectId) fd.append('subject_id', selectedSubjectId);
       if (selectedItemId) fd.append('subject_item_id', selectedItemId);
+      if (selectedModel) fd.append('grading_model', selectedModel);
 
       const res = await gradingAPI.startGrading(fd);
       navigate(`/dashboard/${res.data.session_id}`);
@@ -528,6 +538,7 @@ export default function UploadPage() {
         </div>
         <div style={s.headerRight}>
           <button style={s.historyBtn} onClick={() => navigate('/history')}>📚 채점 기록</button>
+          <button style={s.revisionBtn} onClick={() => navigate('/revisions')}>📝 수정 로그</button>
           <span style={s.userName}>{user?.username} ({user?.role})</span>
           <button style={s.logoutBtn} onClick={logout}>로그아웃</button>
         </div>
@@ -745,6 +756,42 @@ export default function UploadPage() {
 
             <RubricEditor rubric={rubric} onChange={setRubric} />
 
+            {/* 채점 모델 선택 */}
+            <div style={s.modelPickerCard}>
+              <div style={s.modelPickerHeader}>
+                <span style={s.modelPickerTitle}>🤖 채점 AI 모델 선택</span>
+                <span style={s.modelPickerHint}>모델별로 채점 정확도와 속도가 다릅니다</span>
+              </div>
+              {availableModels.length === 0 ? (
+                <div style={s.modelPickerEmpty}>사용 가능한 모델이 없습니다 (관리자 설정에서 API 키를 확인하세요)</div>
+              ) : (
+                <div style={s.modelPickerList}>
+                  {availableModels.map(m => (
+                    <label
+                      key={m.id}
+                      style={{
+                        ...s.modelOption,
+                        ...(selectedModel === m.id ? s.modelOptionSelected : {}),
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="grading-model"
+                        value={m.id}
+                        checked={selectedModel === m.id}
+                        onChange={() => setSelectedModel(m.id)}
+                        style={{ marginRight: 10 }}
+                      />
+                      <span style={s.modelOptionLabel}>
+                        <span style={s.modelProviderBadge(m.provider)}>{m.provider}</span>
+                        {m.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {error && <div style={{ ...s.error, marginTop: 16 }}>{error}</div>}
 
             <div style={{ ...s.actions, marginTop: 24 }}>
@@ -790,6 +837,10 @@ const s = {
   historyBtn: {
     background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6,
     padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: '#374151', fontWeight: 500,
+  },
+  revisionBtn: {
+    background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6,
+    padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: '#92400e', fontWeight: 500,
   },
   userName: { fontSize: 14, color: '#64748b' },
   logoutBtn: { background: 'none', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 14, color: '#64748b' },
@@ -846,6 +897,38 @@ const s = {
     borderRadius: '50%', marginBottom: 24,
     animation: 'spin 1s linear infinite',
   },
+
+  /* 채점 모델 선택 */
+  modelPickerCard: {
+    marginTop: 24, padding: '18px 20px',
+    background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0',
+  },
+  modelPickerHeader: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 14, flexWrap: 'wrap', gap: 8,
+  },
+  modelPickerTitle: { fontSize: 15, fontWeight: 700, color: '#1e293b' },
+  modelPickerHint: { fontSize: 12, color: '#64748b' },
+  modelPickerEmpty: { fontSize: 13, color: '#94a3b8', padding: '12px 0', textAlign: 'center' },
+  modelPickerList: { display: 'flex', flexDirection: 'column', gap: 8 },
+  modelOption: {
+    display: 'flex', alignItems: 'center', padding: '10px 14px',
+    background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8,
+    cursor: 'pointer', transition: 'all 0.15s',
+  },
+  modelOptionSelected: {
+    background: '#eff6ff', borderColor: '#2563eb',
+  },
+  modelOptionLabel: {
+    fontSize: 14, color: '#1e293b', display: 'flex',
+    alignItems: 'center', gap: 8, flex: 1,
+  },
+  modelProviderBadge: (provider) => ({
+    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+    background: provider === 'fireworks' ? '#fef3c7' : '#dbeafe',
+    color: provider === 'fireworks' ? '#b45309' : '#1d4ed8',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+  }),
 };
 
 /* Inject spinner animation */

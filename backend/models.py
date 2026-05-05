@@ -65,6 +65,7 @@ class GradingSessionDB(Base):
     error = Column(Text, nullable=True)
     results_json = Column(Text, nullable=True)
     tokens_used = Column(Integer, default=0)
+    grading_model = Column(String(200), nullable=True)  # 채점에 사용된 모델 (예: openai/gpt-4o-mini)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
