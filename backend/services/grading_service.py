@@ -62,17 +62,18 @@ async def grade_student_notebook(
     student_nb_content: bytes,
     answer_nb_content: bytes,
     criteria: GradingCriteria,
-    execute: bool = False
-) -> Tuple[List[ProblemResult], Optional[str]]:
+    execute: bool = False,
+    model: Optional[str] = None,
+) -> Tuple[List[ProblemResult], Optional[str], int]:
     """
     단일 학생 노트북 채점.
-    반환: (문제별 결과 리스트, 에러 메시지)
+    반환: (문제별 결과 리스트, 에러 메시지, 토큰 사용량)
     """
     try:
         student_nb = parse_notebook(student_nb_content)
         answer_nb = parse_notebook(answer_nb_content)
     except Exception as e:
-        return [], f"노트북 파싱 오류: {str(e)}"
+        return [], f"노트북 파싱 오류: {str(e)}", 0
 
     # Execute notebooks if requested
     execution_error = None
@@ -250,7 +251,10 @@ async def grade_student_notebook(
             is_first_problem = False
         for c in stu_cells:
             if c.get('cell_type', 'code') == 'markdown':
-                nb_cells.append(NotebookCell(source=c['source'], outputs=[], cell_type='markdown'))  # type: ignore
+                nb_cells.append(NotebookCell(
+                    source=c['source'], outputs=[], cell_type='markdown',
+                    is_student_answer=c.get('is_student_answer', False),
+                ))  # type: ignore
             else:
                 cell_outputs = []
                 for o in c.get('outputs', []):
@@ -311,7 +315,8 @@ async def grade_student_notebook(
                     execution_output=execution_output_text,
                     global_evaluation_guideline=criteria.global_evaluation_guideline,
                     full_score=problem.full_score,
-                    remaining_score=0  # 이미 working_criteria에 추가했으므로 중복 방지
+                    remaining_score=0,  # 이미 working_criteria에 추가했으므로 중복 방지
+                    model=model,
                 )
                 total_tokens += problem_tokens
                 for r in ai_results:

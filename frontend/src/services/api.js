@@ -59,6 +59,8 @@ export const gradingAPI = {
   getHistory: () => API.get('/grading/history'),
   reviseProblem: (sessionId, payload) => API.patch(`/grading/session/${sessionId}/revise`, payload),
   getRevisions: (sessionId) => API.get(`/grading/session/${sessionId}/revisions`),
+  getAllRevisions: () => API.get('/grading/all-revisions'),
+  getAvailableModels: () => API.get('/grading/available-models'),
 };
 
 export const adminAPI = {

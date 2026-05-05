@@ -96,6 +96,7 @@ class NotebookCell(BaseModel):
     source: str
     outputs: List[NotebookCellOutput] = []
     cell_type: str = "code"
+    is_student_answer: bool = False  # **[...]** 형식의 학생 답변 셀 여부
 
 
 class ProblemResult(BaseModel):
