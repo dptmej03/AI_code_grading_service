@@ -4,7 +4,7 @@ import uuid
 import asyncio
 import io
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from fastapi import (
@@ -762,6 +762,16 @@ async def get_student_detail(
     return student_data
 
 
+def _to_kst(dt: datetime) -> str:
+    """UTC datetime을 KST(Asia/Seoul)로 변환하여 ISO 문자열 반환."""
+    if not dt:
+        return ""
+    kst = timezone(timedelta(hours=9))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(kst).isoformat()
+
+
 @app.get("/grading/history")
 async def get_history(
     current_user=Depends(get_current_user),
@@ -793,8 +803,8 @@ async def get_history(
             "total_students": r.total_students,
             "processed_students": r.processed_students,
             "grading_model": r.grading_model,
-            "created_at": r.created_at.isoformat() if r.created_at else "",
-            "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            "created_at": _to_kst(r.created_at),
+            "completed_at": _to_kst(r.completed_at) if r.completed_at else None,
         })
     return result
 
@@ -1314,10 +1324,14 @@ async def download_excel(
     import re
     filename = re.sub(r'[\\/:*?"<>|\s]', '_', filename)
 
+    from urllib.parse import quote
+    # RFC 5987 형식: filename*=UTF-8''<URL-encoded-filename>
+    encoded_filename = quote(filename, safe='')
+
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
     )
 
 
@@ -1609,8 +1623,8 @@ async def admin_list_sessions(
             "total_students": r.total_students,
             "processed_students": r.processed_students,
             "grading_model": r.grading_model,
-            "created_at": r.created_at.isoformat() if r.created_at else "",
-            "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            "created_at": _to_kst(r.created_at),
+            "completed_at": _to_kst(r.completed_at) if r.completed_at else None,
         })
     return result
 
