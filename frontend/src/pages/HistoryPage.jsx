@@ -43,7 +43,7 @@ function ModelBadge({ model }) {
         background: cfg.bg, color: cfg.color, borderRadius: 6,
         padding: '3px 8px', fontSize: 11, fontWeight: 600,
         fontFamily: 'monospace', whiteSpace: 'nowrap',
-        maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis',
+        maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis',
         display: 'inline-block',
       }}
     >
@@ -188,14 +188,14 @@ export default function HistoryPage() {
                 <table style={s.table}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      <th style={th}>날짜</th>
-                      <th style={th}>상태</th>
-                      <th style={th}>세부 항목</th>
-                      <th style={{ ...th, textAlign: 'center' }}>학생 수</th>
-                      <th style={th}>완료 시간</th>
-                      <th style={{ ...th, textAlign: 'center' }}>채점 AI</th>
-                      <th style={{ ...th, textAlign: 'center' }}>결과 보기</th>
-                      <th style={{ ...th, textAlign: 'center' }}>삭제</th>
+                      <th style={{ ...th, width: '140px' }}>날짜</th>
+                      <th style={{ ...th, width: '90px' }}>상태</th>
+                      <th style={{ ...th, width: '120px' }}>세부 항목</th>
+                      <th style={{ ...th, textAlign: 'center', width: '70px' }}>학생 수</th>
+                      <th style={{ ...th, width: '140px' }}>완료 시간</th>
+                      <th style={{ ...th, textAlign: 'center', width: '110px' }}>채점 AI</th>
+                      <th style={{ ...th, textAlign: 'center', width: '80px' }}>결과 보기</th>
+                      <th style={{ ...th, textAlign: 'center', width: '70px' }}>삭제</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -351,7 +351,7 @@ const s = {
   subjectName: { fontSize: 17, fontWeight: 700, color: '#1e293b' },
   sessionCount: { fontSize: 13, color: '#94a3b8', background: '#f1f5f9', borderRadius: 20, padding: '2px 10px' },
   tableCard: { background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)' },
-  table: { width: '100%', borderCollapse: 'collapse' },
+  table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
   viewBtn: { background: '#eff6ff', color: '#2563eb', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   viewBtnDisabled: { background: '#f1f5f9', color: '#94a3b8', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'default', fontSize: 13 },
   deleteBtn: { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
