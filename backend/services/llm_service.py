@@ -69,19 +69,19 @@ def get_llm_client(model: str) -> Tuple[AsyncOpenAI, str]:
 
 def _build_client(api_key: str, base_url: str) -> AsyncOpenAI:
     http_client = httpx.AsyncClient(
-        timeout=httpx.Timeout(120.0, connect=30.0),
+        timeout=httpx.Timeout(180.0, connect=30.0),
         limits=httpx.Limits(max_connections=20, max_keepalive_connections=5),
     )
     return AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
         http_client=http_client,
-        timeout=120.0,
+        timeout=180.0,
         max_retries=2,
     )
 
 
-async def _call_with_retry(coro_fn, max_retries: int = 3):
+async def _call_with_retry(coro_fn, max_retries: int = 5):
     """RateLimitError 발생 시 exponential backoff으로 재시도."""
     delay = 10
     for attempt in range(max_retries + 1):
@@ -356,6 +356,10 @@ async def grade_with_ai(
 
         content = response.choices[0].message.content
         tokens_used = response.usage.total_tokens if response.usage else 0
+
+        if not content:
+            print(f"[ERROR] 빈 응답 수신 (model={model}, problem={problem_id}), response={response}")
+            return [{"item": c.item, "max_score": c.score, "score": 0, "reason": "모델 빈 응답 오류"} for c in criteria], "모델이 응답을 생성하지 못했습니다", 0
 
         # JSON 파싱 (마크다운 코드블록 제거)
         content = content.strip()
