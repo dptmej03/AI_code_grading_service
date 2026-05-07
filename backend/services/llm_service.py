@@ -19,12 +19,12 @@ DEFAULT_MODEL = "openai/gpt-4o-mini"
 
 # 사용 가능한 모델 목록 (provider/model_id 형식)
 AVAILABLE_MODELS = [
-    {"id": "openai/gpt-4o-mini", "label": "GPT-4o mini (빠르고 저렴)", "provider": "openai"},
-    {"id": "openai/gpt-4o", "label": "GPT-4o (정확도 ↑)", "provider": "openai"},
-    {"id": "openai/gpt-4.1-mini", "label": "GPT-4.1 mini", "provider": "openai"},
-    {"id": "fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct", "label": "Llama 3.1 70B (Fireworks)", "provider": "fireworks"},
-    {"id": "fireworks/accounts/fireworks/models/qwen2p5-coder-32b-instruct", "label": "Qwen2.5 Coder 32B (Fireworks, 코딩 특화)", "provider": "fireworks"},
-    {"id": "fireworks/accounts/fireworks/models/deepseek-v3", "label": "DeepSeek V3 (Fireworks, 추론 강함)", "provider": "fireworks"},
+    {"id": "openai/gpt-4o-mini", "label": "gpt-4o-mini", "provider": "openai"},
+    {"id": "openai/gpt-4o", "label": "gpt-4o", "provider": "openai"},
+    {"id": "openai/gpt-4.1-mini", "label": "gpt-4.1-mini", "provider": "openai"},
+    {"id": "fireworks/accounts/fireworks/models/llama-v3p1-70b-instruct", "label": "llama-70b", "provider": "fireworks"},
+    {"id": "fireworks/accounts/fireworks/models/qwen2p5-coder-32b-instruct", "label": "qwen-32b", "provider": "fireworks"},
+    {"id": "fireworks/accounts/fireworks/models/deepseek-v3", "label": "deepseek-v3", "provider": "fireworks"},
 ]
 
 
