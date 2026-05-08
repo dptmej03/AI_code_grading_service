@@ -153,7 +153,15 @@ async def grade_student_notebook(
             ans_code += "### [정답 설명]\n" + "\n\n".join(c['source'] for c in ans_markdown_cells) + "\n\n### [정답 코드]\n"
         ans_code += "\n\n".join(c['source'] for c in ans_code_cells) if ans_code_cells else ""
 
+        # preamble의 코드 셀 추출 (import 등)
+        preamble_code = ""
+        for c in stu_preamble_cells:
+            if c.get('cell_type', 'code') == 'code' and c.get('source', '').strip():
+                preamble_code += c['source'] + "\n\n"
+
         stu_code = ""
+        if preamble_code:
+            stu_code = preamble_code
         if stu_markdown_cells:
             stu_code += "### [학생 설명]\n" + "\n\n".join(c['source'] for c in stu_markdown_cells) + "\n\n### [학생 코드]\n"
         stu_code += "\n\n".join(c['source'] for c in stu_code_cells) if stu_code_cells else ""
