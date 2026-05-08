@@ -170,6 +170,7 @@ async def generate_rubric_with_ai(
         response = await _call_with_retry(lambda: client.chat.completions.create(
             model=model_name,
             max_tokens=4096,
+            temperature=0,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -287,7 +288,11 @@ async def grade_with_ai(
      - 코드가 에러나면 → 추가 배점 0점"""
     consistency_instruction = "feedback에서 잘했다고 했으면 rubric_scores의 score는 반드시 max_score와 같아야 합니다."
 
-    system_prompt = f"""⚠️ **중요**: 반드시 유효한 JSON만 출력하세요. 마크다운, 설명, 다른 텍스트를 절대 포함하지 마세요.
+    system_prompt = f"""⚠️ **필수 규칙 (어기면 안 됨)**:
+1. 반드시 완전하고 유효한 JSON만 출력 (마크다운 X, 설명 X, 다른 텍스트 X)
+2. JSON은 반드시 완전해야 함 (끝이 잘리면 절대 안 됨)
+3. 모든 문자열은 큰따옴표로 감싸기
+4. 개행은 \\n으로만 표현 (실제 개행 금지)
 
 당신은 현업 시니어 개발자이자 꼼꼼한 컴퓨터공학 전공 조교입니다.
 {global_guideline_text}{remaining_info}
@@ -344,6 +349,7 @@ async def grade_with_ai(
         response = await _call_with_retry(lambda: client.chat.completions.create(
             model=model_name,
             max_tokens=4096,
+            temperature=0,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
