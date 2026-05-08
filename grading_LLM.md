@@ -15,8 +15,6 @@
 | 라벨 | 모델 ID | 풀네임 | 추론 여부 | 특징 |
 |------|---------|--------|-----------|------|
 | deepseek-v3.2 | `fireworks/accounts/fireworks/models/deepseek-v3p2` | DeepSeek V3.2 | ❌ 일반 LLM | 코딩 강점, 안정적 |
-| kimi-k2.6 | `fireworks/accounts/fireworks/models/kimi-k2p6` | Kimi K2.6 | ❌ 일반 LLM | MoE 구조, 1028B 파라미터 |
-| qwen3.6-plus | `fireworks/accounts/fireworks/models/qwen3p6-plus` | Qwen3.6 Plus | ❌ 일반 LLM | Alibaba 최신 모델, 강력한 성능 |
 
 ---
 
@@ -24,9 +22,9 @@
 
 | 라벨 | 이유 |
 |------|------|
-| `deepseek-v4(추론)` / `deepseek-v4-pro` | 추론 모델 → 채점에 불필요, qwen3.6-plus로 교체 |
-| `kimi-k2-instruct` | 모델 ID 오류 → kimi-k2p6으로 교체 |
-| `qwen3.5-35b-a3b` | 모델 ID 오류 → qwen3p6-plus로 교체 |
+| `deepseek-v4(추론)` / `deepseek-v4-pro` | 추론 모델 → 채점에 불필요 |
+| `kimi-k2-instruct`, `kimi-k2.6` | JSON 지시 미준수, parse error 발생 |
+| `qwen3.5-35b-a3b`, `qwen3.6-plus` | API Timeout, 응답 속도 너무 느림 |
 
 ---
 
