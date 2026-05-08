@@ -23,8 +23,6 @@ AVAILABLE_MODELS = [
     {"id": "openai/gpt-4o", "label": "gpt-4o", "provider": "openai"},
     {"id": "openai/gpt-4.1-mini", "label": "gpt-4.1-mini", "provider": "openai"},
     {"id": "fireworks/accounts/fireworks/models/deepseek-v3p2", "label": "deepseek-v3.2", "provider": "fireworks"},
-    {"id": "fireworks/accounts/fireworks/models/kimi-k2p6", "label": "kimi-k2.6", "provider": "fireworks"},
-    {"id": "fireworks/accounts/fireworks/models/qwen3p6-plus", "label": "qwen3.6-plus", "provider": "fireworks"},
 ]
 
 
@@ -413,8 +411,8 @@ async def grade_with_ai(
         return graded, overall_feedback, tokens_used
 
     except json.JSONDecodeError as e:
-        print(f"[PARSE ERROR] JSONDecodeError | model={model} | problem={problem_id} | error={e}")
-        print(f"[CONTENT] {content!r}")
+        print(f"\n[PARSE ERROR] JSONDecodeError | model={model} | problem={problem_id} | error={e}")
+        print(f"[CONTENT_FULL] {content!r}\n")
         return [
             {
                 "item": c.item,
