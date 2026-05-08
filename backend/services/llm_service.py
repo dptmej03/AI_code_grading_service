@@ -413,7 +413,8 @@ async def grade_with_ai(
         return graded, overall_feedback, tokens_used
 
     except json.JSONDecodeError as e:
-        print(f"[PARSE ERROR] JSONDecodeError | model={model} | problem={problem_id} | content={content[:300]!r} | error={e}")
+        print(f"[PARSE ERROR] JSONDecodeError | model={model} | problem={problem_id} | error={e}")
+        print(f"[CONTENT] {content!r}")
         return [
             {
                 "item": c.item,
