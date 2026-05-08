@@ -15,8 +15,8 @@
 | 라벨 | 모델 ID | 풀네임 | 추론 여부 | 특징 |
 |------|---------|--------|-----------|------|
 | deepseek-v3.2 | `fireworks/accounts/fireworks/models/deepseek-v3p2` | DeepSeek V3.2 | ❌ 일반 LLM | 코딩 강점, 안정적 |
-| kimi-k2 | `fireworks/accounts/fireworks/models/kimi-k2-instruct` | Kimi K2 Instruct | ❌ 일반 LLM | MoE 구조, 32B activated / 1T total |
-| qwen3.5-35b | `fireworks/accounts/fireworks/models/qwen3p5-35b-a3b` | Qwen3.5 35B A3B | ❌ 일반 LLM | 한국어 강점, 채점 정확도 기대 |
+| kimi-k2.6 | `fireworks/accounts/fireworks/models/kimi-k2p6` | Kimi K2.6 | ❌ 일반 LLM | MoE 구조, 1028B 파라미터 |
+| qwen3.6-plus | `fireworks/accounts/fireworks/models/qwen3p6-plus` | Qwen3.6 Plus | ❌ 일반 LLM | Alibaba 최신 모델, 강력한 성능 |
 
 ---
 
@@ -24,8 +24,9 @@
 
 | 라벨 | 이유 |
 |------|------|
-| `deepseek-v4(추론)` / `deepseek-v4-pro` | 추론 모델 → 채점에 불필요, qwen3.5-35b로 교체 |
-| `kimi-k2p6` | deprecated 모델 ID → kimi-k2-instruct로 교체 |
+| `deepseek-v4(추론)` / `deepseek-v4-pro` | 추론 모델 → 채점에 불필요, qwen3.6-plus로 교체 |
+| `kimi-k2-instruct` | 모델 ID 오류 → kimi-k2p6으로 교체 |
+| `qwen3.5-35b-a3b` | 모델 ID 오류 → qwen3p6-plus로 교체 |
 
 ---
 
