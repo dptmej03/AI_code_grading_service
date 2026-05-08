@@ -192,7 +192,17 @@ async def generate_rubric_with_ai(
         else:
             print(f"[PARSE ERROR] JSON 없음 | model={model} | content={content[:300]!r}")
 
-        rubric = json.loads(content)
+        # JSON 파싱 시도 (줄바꿈 이스케이프 재시도)
+        try:
+            rubric = json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"[JSON Parse Retry] 첫 시도 실패, 줄바꿈 정제 후 재시도: {e}")
+            content_cleaned = content.replace('\n', ' ').replace('\r', ' ')
+            try:
+                rubric = json.loads(content_cleaned)
+            except json.JSONDecodeError:
+                print(f"[JSON Parse Failed] 재시도 후에도 실패")
+                raise
         return rubric
 
     except APIQuotaError:
@@ -382,7 +392,17 @@ async def grade_with_ai(
         else:
             print(f"[PARSE ERROR] JSON 없음 | model={model} | problem={problem_id} | content={content[:300]!r}")
 
-        data = json.loads(content)
+        # JSON 파싱 시도 (줄바꿈 이스케이프 재시도)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"[JSON Parse Retry] 첫 시도 실패, 줄바꿈 정제 후 재시도: {e}")
+            content_cleaned = content.replace('\n', ' ').replace('\r', ' ')
+            try:
+                data = json.loads(content_cleaned)
+            except json.JSONDecodeError:
+                print(f"[JSON Parse Failed] 재시도 후에도 실패")
+                raise
         rubric_scores = data.get("rubric_scores", [])
         overall_feedback = data.get("feedback", "")
 
