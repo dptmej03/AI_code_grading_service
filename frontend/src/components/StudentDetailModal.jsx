@@ -167,13 +167,32 @@ function ProblemCard({ problem, sessionId, studentFilename, canEdit, onUpdated }
     }
   };
 
+  // 표시 우선순위: AI 오류(노랑) > 부분점수(파랑) > 기본 상태색
+  const showPartial = !problem.has_ai_error && problem.has_partial_score;
+  const headerBorderColor = problem.has_ai_error ? '#fde68a' : (showPartial ? '#bfdbfe' : statusBorder);
+  const headerLeftColor = problem.has_ai_error ? '#f59e0b' : (showPartial ? '#3b82f6' : statusColor);
+  const headerBg = problem.has_ai_error ? '#fef3c7' : (showPartial ? '#dbeafe' : statusBg);
+  const headerBottomBorder = problem.has_ai_error ? '#fde68a' : (showPartial ? '#bfdbfe' : statusBorder);
+
   return (
-    <div style={{ ...fb.problem, borderColor: problem.has_ai_error ? '#fde68a' : statusBorder, borderLeftWidth: 4, borderLeftColor: problem.has_ai_error ? '#f59e0b' : statusColor }}>
-      <div style={{ ...fb.problemHeader, background: problem.has_ai_error ? '#fef3c7' : statusBg, borderBottomColor: problem.has_ai_error ? '#fde68a' : statusBorder }}>
+    <div style={{ ...fb.problem, borderColor: headerBorderColor, borderLeftWidth: 4, borderLeftColor: headerLeftColor }}>
+      <div style={{ ...fb.problemHeader, background: headerBg, borderBottomColor: headerBottomBorder }}>
         <span style={fb.problemTitle}>
           문제 {problem.problem_id}
           {problem.is_revised && <span style={fb.revisedBadge}>✏️ 수정됨</span>}
           {problem.has_ai_error && <span style={fb.aiErrorBadge}>⚠️ AI 채점 오류</span>}
+          {showPartial && (
+            <span style={{
+              marginLeft: 8,
+              padding: '2px 8px',
+              borderRadius: 4,
+              fontSize: 11,
+              fontWeight: 600,
+              background: '#dbeafe',
+              color: '#1e40af',
+              border: '1px solid #bfdbfe'
+            }}>½ 부분점수</span>
+          )}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ ...fb.problemScore, color: statusColor }}>
