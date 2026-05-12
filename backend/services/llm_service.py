@@ -278,10 +278,14 @@ async def grade_with_ai(
     if remaining_score and remaining_score > 0:
         remaining_info = f"\n\n⚠️ **중요**: 아래 루브릭 항목들의 합계가 {full_score}점보다 작습니다. 아래 점수 항목 외에 **{remaining_score:.1f}점의 추가 배점**이 있으므로, 전체 코드 품질과 학생의 이해도를 종합적으로 평가하여 이 {remaining_score:.1f}점을 추가로 부여하세요."
 
-    scoring_instruction = """2. **점수 부여 기준**:
-   - **부분점수 항목들** (0점 또는 해당 점수만 - 체크리스트 방식):
-     - 항목을 완전히 충족 → 해당 항목의 만점
-     - 항목을 충족하지 않음 → 0점 (부분점 없음)
+    scoring_instruction = """2. **점수 부여 기준 (3단계)**:
+   - **부분점수 항목들** (0점 / 절반점수 / 만점 중 택일):
+     - ✅ **완전 충족** → 해당 항목의 **만점** (score = max_score)
+     - ⚠️ **부분 충족** → 해당 항목의 **절반점수** (score = max_score * 0.5)
+       * 예: "개념과 처리 과정 자세히 설명" (2점) → 개념은 설명했으나 과정 부족 → **1점**
+       * 예: "원본·이진화·결과 3장 출력" (1점) → 2장만 출력함 → **0.5점**
+       * 예: 항목에서 요구한 요소 중 일부만 충족
+     - ❌ **불충족** → **0점**
      - ⚠️ **루브릭 요구사항 고려**: 각 항목의 요구사항(예: "십진수로 표현")을 확인하여 평가. 요구사항 위반이 있으면 감점 고려.
      - ⚠️ **독립 평가 원칙** (CRITICAL): 다른 항목의 오류가 이 항목 점수를 결정하면 안 됨. 단, **이 항목 자체의 코드에 로직 오류**(잘못된 함수 사용, 잘못된 인자, 잘못된 로직 등)가 있으면 0점.
      - ⚠️ **reason 필수 규칙** (매우 중요): reason은 반드시 해당 코드 로직에 대한 구체적 설명만. 절대 금지 표현:
@@ -290,12 +294,13 @@ async def grade_with_ai(
        * '다른 변수 미정의로 인해 실행 불가'
        * 기타 모든 "오류/실행/불가" 표현
        - ✅ 맞은 경우 예: "cv2.threshold(src, 120, 255, cv2.THRESH_BINARY)로 올바르게 이진화 구현"
-       - ✅ 틀린 경우 예: "np.bitwise_not은 인자 1개만 받는데 2개를 전달하여 로직 오류", "루브릭에서 십진수 표현 요구했으나 이진수로 표현함"
+       - ✅ 부분 충족 예: "히스토그램 평활화의 개념은 잘 설명했으나 처리 과정 설명이 부족"
+       - ✅ 틀린 경우 예: "np.bitwise_not은 인자 1개만 받는데 2개를 전달하여 로직 오류"
    - **추가 배점** (AI 자율 판단 - 위 항목들 외의 배점):
      - 위 항목들 점수 합계 < full_score인 경우, 그 차이를 전체 코드 품질로 자율적으로 부여
      - 코드 구현의 완성도, 효율성, 가독성 등을 종합 평가하여 추가 점수 부여
      - 실행 오류가 있어도 → 추가 배점은 코드 로직 기반으로 판단 (오류 자체로 0점 금지)"""
-    consistency_instruction = "feedback에서 잘했다고 했으면 rubric_scores의 score는 반드시 max_score와 같아야 합니다. 단, 해당 항목의 코드 자체에 오류가 있으면 feedback과 무관하게 0점이어야 합니다."
+    consistency_instruction = "feedback에서 완전히 잘했다고 했으면 rubric_scores의 score는 반드시 max_score와 같아야 합니다. feedback에서 부분적으로 잘했다(일부 누락/미흡)고 했으면 score는 max_score * 0.5여야 합니다. 단, 해당 항목의 코드 자체에 로직 오류가 있으면 feedback과 무관하게 0점이어야 합니다."
 
     system_prompt = f"""⚠️ **필수 규칙 (어기면 안 됨)**:
 1. 반드시 완전하고 유효한 JSON만 출력 (마크다운 X, 설명 X, 다른 텍스트 X)
@@ -335,7 +340,10 @@ async def grade_with_ai(
 3. Feedback: 평가 종합
 
 **응답 형식: 반드시 아래 JSON만 반환 (마크다운 X)**
-⚠️ score는 반드시 0 또는 max_score만 (중간값 금지)
+⚠️ score는 반드시 다음 3가지 값 중 하나:
+  - 0 (불충족)
+  - max_score * 0.5 (부분 충족)
+  - max_score (완전 충족)
 ⚠️ feedback은 반드시 아래 형식으로 작성 (한 덩어리 문장 금지):
   "잘한 점:\\n- 항목1\\n- 항목2\\n\\n개선점:\\n- 항목1\\n- 항목2"
 
@@ -343,7 +351,7 @@ async def grade_with_ai(
   "analysis": "핵심 로직과 달성도 분석",
   "feedback": "잘한 점:\\n- (잘한 점 1)\\n- (잘한 점 2)\\n\\n개선점:\\n- (개선점 1)\\n- (개선점 2)",
   "rubric_scores": [
-    {{"item": "항목명", "score": 0 또는 max_score, "max_score": 최대점수, "reason": "근거"}}
+    {{"item": "항목명", "score": 0 또는 max_score*0.5 또는 max_score, "max_score": 최대점수, "reason": "근거"}}
   ],
   "total_score": 합계
 }}"""
@@ -430,8 +438,16 @@ async def grade_with_ai(
             found = rubric_scores[i] if i < len(rubric_scores) else None
             if found:
                 raw_score = float(found.get("score", 0))
-                # 부분점수 없음: 0 또는 max_score만 허용 (50% 이상이면 만점)
-                clamped_score = c.score if raw_score >= c.score * 0.5 else 0.0
+                # 3단계 채점: 만점 / 절반 / 0점
+                # - raw_score >= max_score * 0.75 → 만점
+                # - raw_score >= max_score * 0.25 → 절반 (부분 충족)
+                # - 그 외 → 0점
+                if raw_score >= c.score * 0.75:
+                    clamped_score = c.score
+                elif raw_score >= c.score * 0.25:
+                    clamped_score = round(c.score * 0.5, 2)
+                else:
+                    clamped_score = 0.0
                 reason = found.get("reason", "")
 
                 # 🔍 reason 검증: 실행 오류 언급 금지

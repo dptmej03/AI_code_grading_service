@@ -697,6 +697,7 @@ async def get_session(
                     "is_revised": p.is_revised,
                     "revised_at": p.revised_at,
                     "has_ai_error": p.has_ai_error,
+                    "has_partial_score": p.has_partial_score,
                 } for p in r.problems],
             })
         return {
@@ -1007,6 +1008,11 @@ async def revise_problem_score(
     if revision_logs:
         target_problem["is_revised"] = True
         target_problem["revised_at"] = datetime.utcnow().isoformat()
+        # 부분점수 항목 재감지 (0 < score < max_score)
+        target_problem["has_partial_score"] = any(
+            0 < float(ps.get("score", 0)) < float(ps.get("max_score", 0))
+            for ps in target_problem.get("partial_scores", [])
+        )
         target_student["total_score"] = round(
             sum(p.get("obtained_score", 0) for p in target_student.get("problems", [])), 2
         )
@@ -1160,6 +1166,9 @@ async def download_excel(
     ai_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
     revised_fill = PatternFill(start_color="16A34A", end_color="16A34A", fill_type="solid")
     highlight_fill = PatternFill(start_color="FEF08A", end_color="FEF08A", fill_type="solid")
+    # AI 오류 = 노란색 / 부분점수 = 파란색 (UI와 동일한 색상 컨벤션)
+    ai_error_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    partial_score_fill = PatternFill(start_color="DBEAFE", end_color="DBEAFE", fill_type="solid")
     center_align = Alignment(horizontal="center", vertical="center")
     wrap_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
     thin_border = Border(
@@ -1224,7 +1233,13 @@ async def download_excel(
         col = 3
         for pid in pids:
             p = next((p for p in student.problems if p.problem_id == pid), None)
-            ws1.cell(row=row_idx, column=col, value=p.obtained_score if p else 0)
+            score_cell = ws1.cell(row=row_idx, column=col, value=p.obtained_score if p else 0)
+            # AI 오류(노랑) > 부분점수(파랑) 우선순위로 색상 적용
+            if p:
+                if p.has_ai_error:
+                    score_cell.fill = ai_error_fill
+                elif getattr(p, "has_partial_score", False):
+                    score_cell.fill = partial_score_fill
             col += 1
         ws1.cell(row=row_idx, column=col, value=student.total_score)
         ws1.cell(row=row_idx, column=col + 1, value=rank_map1[orig_idx])
@@ -1253,7 +1268,14 @@ async def download_excel(
                 ws2.cell(row=row, column=3, value=f"Q{problem.problem_id}").alignment = center_align
                 ws2.cell(row=row, column=4, value=ps.item).alignment = center_align
                 ws2.cell(row=row, column=5, value=ps.max_score).alignment = center_align
-                ws2.cell(row=row, column=6, value=ps.score).alignment = center_align
+                score_cell = ws2.cell(row=row, column=6, value=ps.score)
+                score_cell.alignment = center_align
+                # 획득점수 컬럼 색상: AI 오류(노랑) > 부분점수(파랑) 우선순위
+                # AI 오류는 problem 레벨, 부분점수는 항목별 (0 < score < max_score)
+                if problem.has_ai_error:
+                    score_cell.fill = ai_error_fill
+                elif 0 < float(ps.score) < float(ps.max_score):
+                    score_cell.fill = partial_score_fill
                 ws2.cell(row=row, column=7, value=ps.reason).alignment = wrap_align
                 if ps_idx == 0:
                     ws2.cell(row=row, column=8, value=problem.ai_feedback or "").alignment = wrap_align
@@ -1288,7 +1310,9 @@ async def download_excel(
         cell.border = thin_border
 
     rank_map3 = build_rank_map(revised_results)
-    for row_idx, (orig_idx, student) in enumerate(list(enumerate(revised_results)), 2):
+    # 순위 오름차순 정렬 (1위부터 표시)
+    sorted_pairs3 = sorted(enumerate(revised_results), key=lambda x: rank_map3[x[0]])
+    for row_idx, (orig_idx, student) in enumerate(sorted_pairs3, 2):
         ws3.cell(row=row_idx, column=1, value=student.student_id).alignment = center_align
         ws3.cell(row=row_idx, column=2, value=student.student_name or "").alignment = center_align
         col = 3

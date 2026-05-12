@@ -45,12 +45,24 @@ export default function ResultTable({ results, onSelectStudent }) {
 
   return (
     <div>
-      <input
-        style={s.search}
-        placeholder="학번, 이름, 파일명 검색..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+        <input
+          style={{ ...s.search, marginBottom: 0, flex: '1 1 auto', minWidth: 200 }}
+          placeholder="학번, 이름, 파일명 검색..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#475569' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 16, height: 16, borderRadius: 4, background: '#fef3c7', border: '1px solid #fde68a' }} />
+            AI 채점 오류
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 16, height: 16, borderRadius: 4, background: '#dbeafe', border: '1px solid #bfdbfe' }} />
+            부분점수 포함
+          </span>
+        </div>
+      </div>
       {/* 고정 높이 스크롤 영역: 학번/이름 열 고정, 헤더 고정, 상하좌우 스크롤 */}
       <div style={{ overflow: 'auto', height: 'calc(100vh - 320px)', minHeight: 150, maxHeight: '90vh', border: '1px solid #e2e8f0', borderRadius: 8, resize: 'vertical' }}>
         <table style={s.table}>
@@ -88,8 +100,12 @@ export default function ResultTable({ results, onSelectStudent }) {
                   </td>
                   {allProblemIds.map(pid => {
                     const p = student.problems.find(p => p.problem_id === pid);
+                    // 배경색 우선순위: AI 오류(노랑) > 부분점수(파랑) > 투명
+                    const bgColor = p?.has_ai_error
+                      ? '#fef3c7'
+                      : (p?.has_partial_score ? '#dbeafe' : 'transparent');
                     return (
-                      <td key={pid} style={{ ...td, textAlign: 'center', backgroundColor: p?.has_ai_error ? '#fef3c7' : 'transparent' }}>
+                      <td key={pid} style={{ ...td, textAlign: 'center', backgroundColor: bgColor }}>
                         {p ? (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                             <span style={{ color: p.obtained_score === p.full_score ? '#059669' : '#d97706', fontWeight: 600 }}>
@@ -109,6 +125,21 @@ export default function ResultTable({ results, onSelectStudent }) {
                                 fontWeight: 700,
                                 color: '#ff8c00'
                               }}>!</span>
+                            )}
+                            {!p.has_ai_error && p.has_partial_score && (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                border: '2px solid #3b82f6',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: '#3b82f6'
+                              }} title="부분점수 항목 포함">½</span>
                             )}
                           </div>
                         ) : <span style={{ color: '#e2e8f0' }}>-</span>}

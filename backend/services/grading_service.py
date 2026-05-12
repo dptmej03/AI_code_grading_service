@@ -362,6 +362,12 @@ async def grade_student_notebook(
 
         obtained = sum(ps.score for ps in ai_partial_scores)
 
+        # 부분점수 항목 감지 (0 < score < max_score인 항목이 하나라도 있으면 True)
+        has_partial_score = any(
+            0 < ps.score < ps.max_score
+            for ps in ai_partial_scores
+        )
+
         problem_results.append(ProblemResult(
             problem_id=pid,
             full_score=problem.full_score,
@@ -372,7 +378,8 @@ async def grade_student_notebook(
             code_cells=nb_cells,
             preamble_cells=nb_preamble,
             problem_description=problem_description,
-            has_ai_error=has_ai_error
+            has_ai_error=has_ai_error,
+            has_partial_score=has_partial_score
         ))
 
     return problem_results, execution_error, total_tokens
