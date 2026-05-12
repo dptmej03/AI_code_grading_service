@@ -169,7 +169,7 @@ async def generate_rubric_with_ai(
     try:
         response = await _call_with_retry(lambda: client.chat.completions.create(
             model=model_name,
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=1.0,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -322,11 +322,17 @@ async def grade_with_ai(
 
 단, 해당 항목의 코드 자체에 로직 오류가 있으면 위 규칙과 무관하게 0점."""
 
-    system_prompt = f"""⚠️ **필수 규칙 (어기면 안 됨)**:
-1. 반드시 완전하고 유효한 JSON만 출력 (마크다운 X, 설명 X, 다른 텍스트 X)
+    system_prompt = f"""🚫 **[최우선 규칙 - 반드시 지켜야 함]**
+첫 글자는 반드시 `{{` 이어야 합니다. "우선", "먼저", "학생" 등 자연어로 시작하면 절대 안 됩니다.
+자연어 설명, 분석 텍스트, 마크다운을 출력하면 시스템 오류가 발생합니다.
+오직 JSON만 출력하세요.
+
+⚠️ **필수 규칙 (어기면 안 됨)**:
+1. 반드시 완전하고 유효한 JSON만 출력 (마크다운 X, 설명 X, 자연어 X, 다른 텍스트 X)
 2. JSON은 반드시 완전해야 함 (끝이 잘리면 절대 안 됨)
 3. 모든 문자열은 큰따옴표로 감싸기
 4. 개행은 \\n으로만 표현 (실제 개행 금지)
+5. 응답의 첫 번째 문자는 반드시 `{{`, 마지막 문자는 반드시 `}}`
 
 당신은 현업 시니어 개발자이자 꼼꼼한 컴퓨터공학 전공 조교입니다.
 {global_guideline_text}{remaining_info}
@@ -342,19 +348,27 @@ async def grade_with_ai(
    - 항목명을 그대로 읽고, 그 요구사항을 충족했는가만 판단
    - 부수적인 코드 문제(미정의 변수, 런타임 에러 가능성 등)는 reason에 쓰지 않음
 
+   **🚫 루브릭에 없는 요소로 감점 절대 금지**:
+   - 항목에 명시되지 않은 함수·코드·스타일로 감점하면 안 됨
+   - 예: 항목이 "1행 3열 출력 + Q03.png 저장"인데 → `plt.show()` 누락으로 감점 ❌
+   - 예: 항목이 "cv2.threshold로 이진화"인데 → 변수명이 마음에 안 든다고 감점 ❌
+   - **루브릭 항목에 적힌 요구사항만 평가**, 나머지는 무시
+
    **항목 분석 방법**:
    1) 항목명에서 요구사항을 모두 추출 (예: "원본/이진화/추출 결과를 1행 3열로 출력, Q04.png로 저장" → ① 원본 출력 ② 이진화 출력 ③ 추출 결과 출력 ④ 1행 3열 배치 ⑤ Q04.png로 저장)
    2) 학생 코드에서 각 요구사항 충족 여부를 확인
    3) 모두 충족 → 만점 / 일부 충족 → 절반점수 / 모두 불충족 → 0점
    4) reason은 어떤 요구사항을 충족하고 못 했는지만 서술
 
-   **❌ 잘못된 reason 예시 (요구사항을 벗어난 평가)**:
+   **❌ 잘못된 reason 예시 (루브릭에 없는 것으로 감점)**:
+   - "1행 3열 배치와 Q03.png 저장은 했으나, plt.show()가 누락되어 0.5점"
+     → plt.show()는 루브릭 요구사항이 아님 → 만점이어야 함
    - "시각화 코드에서 'dst' 변수가 정의되지 않아 런타임 에러 발생 가능성이 있음"
      → 항목은 "1행 3열로 출력, 저장"인데 엉뚱한 dst 변수 이야기
 
    **✅ 올바른 reason 예시 (요구사항 중심)**:
+   - "plt.subplot(1, 3, i+1)로 1행 3열 배치 및 Q03.png 저장 모두 올바르게 구현" → 만점
    - "1행 3열로 plt.subplot 사용했고 Q04.png로 저장했으나, 이진화 영상이 누락됨" → 부분 충족 → 0.5점
-   - "plt.subplot(1, 3, i+1)로 1행 3열 배치 및 Q04.png 저장 모두 올바르게 구현" → 만점
    - "1행 3열 배치는 했으나 Q04.png 저장 코드가 없음" → 부분 충족 → 0.5점
 
 5. **에러와 채점의 독립성** (⚠️ CRITICAL 규칙):
@@ -414,14 +428,16 @@ async def grade_with_ai(
 {rubric_text}
 
 위의 평가 가이드라인과 루브릭에 기반하여 학생 코드를 평가하세요.
-모범 답안의 구현 방식과 다르더라도, 문제를 올바르게 해결했고 기준들을 충족한다면 정답으로 인정하세요."""
+모범 답안의 구현 방식과 다르더라도, 문제를 올바르게 해결했고 기준들을 충족한다면 정답으로 인정하세요.
+
+🚫 다시 한번 강조: 반드시 JSON만 반환하세요. 첫 글자는 반드시 `{{` 입니다."""
 
     client, model_name = get_llm_client(model or DEFAULT_MODEL)
 
     try:
         response = await _call_with_retry(lambda: client.chat.completions.create(
             model=model_name,
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=1.0,
             messages=[
                 {"role": "system", "content": system_prompt},
