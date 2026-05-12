@@ -113,6 +113,7 @@ class ProblemResult(BaseModel):
     is_revised: bool = False
     revised_at: Optional[str] = None
     has_ai_error: bool = False  # AI 채점 오류 여부
+    has_partial_score: bool = False  # 부분점수 항목 포함 여부 (0 < score < max_score)
 
 
 class StudentResult(BaseModel):
