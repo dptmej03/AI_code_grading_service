@@ -6,9 +6,9 @@
 
 | 라벨 | 모델 ID | 특징 | 추론 제어 |
 |------|---------|------|-----------|
-| kimi-k2.6 | `fireworks/accounts/fireworks/models/kimi-k2p6` | 코딩·에이전트 특화, multimodal | 파라미터 없음 (문서에 미기재) |
-| glm-5.1 | `fireworks/accounts/fireworks/models/glm-5p1` | 754B MoE, 코딩 강점, 비쌈 | `reasoning_effort: "none"` |
-| qwen3.6-plus | `fireworks/accounts/fireworks/models/qwen3p6-plus` | Alibaba 플래그십, 한국어 강점 | `reasoning_effort: "none"` |
+| kimi-k2.6 | `fireworks/accounts/fireworks/models/kimi-k2p6` | 코딩·에이전트 특화, multimodal | 파라미터 없음 (미지원) |
+| glm-5.1 | `fireworks/accounts/fireworks/models/glm-5p1` | 754B MoE, 코딩 강점, 비쌈 | 파라미터 없음 (미지원) |
+| qwen3.6-plus | `fireworks/accounts/fireworks/models/qwen3p6-plus` | Alibaba 플래그십, 한국어 강점 | 파라미터 없음 (미지원) |
 
 ---
 
@@ -42,3 +42,6 @@
 - **추론 제어 가능 모델** → `thinking` 파라미터로 비활성화 후 사용 가능
 - **한국어 과제 채점** → Qwen 계열이 유리
 - **코딩 과제** → Kimi, GLM, DeepSeek 계열이 유리
+
+
+# https://docs.fireworks.ai/api-reference/post-chatcompletions
