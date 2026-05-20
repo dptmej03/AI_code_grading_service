@@ -65,6 +65,10 @@ export const gradingAPI = {
   getRevisions: (sessionId) => API.get(`/grading/session/${sessionId}/revisions`),
   getAllRevisions: () => API.get('/grading/all-revisions'),
   getAvailableModels: () => API.get('/grading/available-models'),
+  decomposeItem: (item, problemContext = '') => API.post('/rubric/decompose-items', {
+    item,
+    problem_context: problemContext || null
+  }),
 };
 
 export const adminAPI = {

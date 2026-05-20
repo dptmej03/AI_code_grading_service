@@ -229,6 +229,88 @@ async def generate_rubric_with_ai(
         raise RuntimeError(f"루브릭 생성 중 오류: [{type(e).__name__}] {str(e)}")
 
 
+async def decompose_rubric_item_with_ai(
+    item: str,
+    problem_context: str = "",
+    model: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    루브릭 항목 하나를 독립적인 동사 단위로 분해합니다.
+
+    item: 분해할 채점 항목 텍스트
+    problem_context: 해당 문제의 평가 가이드라인 (선택)
+    반환: [{"item": str, "keywords": [str, ...]}]
+    """
+    context_section = f"\n\n[문제 컨텍스트]\n{problem_context}" if problem_context else ""
+
+    system_prompt = """당신은 대학교 프로그래밍 시험 채점 전문가입니다.
+주어진 채점 항목 하나를 독립적으로 평가 가능한 동사 단위의 세부 항목들로 분해하세요.
+
+규칙:
+- 각 항목은 하나의 명확한 동작(동사)에만 집중
+- 각 항목은 10~60자 이내
+- 최대 8개 항목 이내
+- 반드시 JSON 배열만 반환 (다른 텍스트 금지)
+- keywords: 해당 항목 채점 시 코드에서 반드시 등장해야 하는 함수/값/파라미터명
+
+응답 형식:
+[
+  {"item": "동사 단위 항목 설명", "keywords": ["필수키워드1", "필수키워드2"]},
+  {"item": "동사 단위 항목 설명", "keywords": ["필수키워드"]}
+]"""
+
+    user_prompt = f"""다음 채점 항목을 동사 단위로 분해하세요.{context_section}
+
+[분해할 항목]
+{item}
+
+위 항목을 독립적으로 채점 가능한 세부 항목들로 나누고, 각 항목의 핵심 키워드를 함께 제시하세요."""
+
+    client, model_name = get_llm_client(model or DEFAULT_MODEL)
+
+    try:
+        response = await _call_with_retry(lambda: client.chat.completions.create(
+            model=model_name,
+            max_tokens=1024,
+            temperature=0.5,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        ))
+
+        content = response.choices[0].message.content.strip()
+
+        # 마크다운 코드블록 제거
+        if content.startswith("```"):
+            lines = content.split("\n")
+            start = 1 if lines[0].startswith("```") else 0
+            end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
+            content = "\n".join(lines[start:end])
+
+        # JSON 배열 파싱
+        arr_start = content.find("[")
+        arr_end = content.rfind("]") + 1
+        if arr_start != -1 and arr_end > arr_start:
+            content = content[arr_start:arr_end]
+
+        result = json5.loads(content)
+        if not isinstance(result, list):
+            raise ValueError("응답이 배열 형식이 아닙니다")
+
+        return [
+            {
+                "item": r.get("item", ""),
+                "keywords": r.get("keywords", []) if isinstance(r.get("keywords"), list) else []
+            }
+            for r in result if r.get("item")
+        ]
+
+    except Exception as e:
+        print(f"[ERROR] 항목 분해 오류:\n{traceback.format_exc()}")
+        raise RuntimeError(f"항목 분해 중 오류: [{type(e).__name__}] {str(e)}")
+
+
 async def grade_with_ai(
     student_code: str,
     answer_code: str,
@@ -276,10 +358,13 @@ async def grade_with_ai(
         criteria = [PartialScoreCriterion(item="종합 평가", score=full_score)]
 
     # 루브릭을 문자열로 포맷팅
-    rubric_text = "\n".join([
-        f"- {c.item}: 최대 {c.score}점"
-        for c in criteria
-    ])
+    rubric_lines = []
+    for c in criteria:
+        line = f"- {c.item}: 최대 {c.score}점"
+        if c.keywords:
+            line += f" [핵심단어: {', '.join(c.keywords)}]"
+        rubric_lines.append(line)
+    rubric_text = "\n".join(rubric_lines)
 
     # 실행 결과 (있으면 포함)
     execution_context = ""

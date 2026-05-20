@@ -27,14 +27,15 @@ from auth import (
 from schemas import (
     Token, LoginRequest, RegisterRequest, GradingCriteria, GradingSession,
     StudentResult, SubjectCreate, SubjectResponse, HistorySessionItem, SubjectItemCreate,
-    ProblemRevisionRequest, RevisionLogItem, SubjectUpdate, SubjectItemUpdate
+    ProblemRevisionRequest, RevisionLogItem, SubjectUpdate, SubjectItemUpdate,
+    DecomposeRequest
 )
 from services.notebook_service import (
     extract_notebooks_from_zip, parse_student_id_from_filename,
     parse_notebook, split_notebook_by_problems
 )
 from services.grading_service import grade_student_notebook
-from services.llm_service import APIQuotaError, generate_rubric_with_ai
+from services.llm_service import APIQuotaError, generate_rubric_with_ai, decompose_rubric_item_with_ai
 
 app = FastAPI(title="Jupyter Notebook 자동 채점 시스템", version="2.0.0")
 
@@ -1605,6 +1606,22 @@ async def parse_markdown_text(text: str):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파싱 오류: {str(e)}")
+
+
+@app.post("/rubric/decompose-items")
+async def decompose_rubric_items(
+    request: DecomposeRequest,
+    _current_user=Depends(get_current_user)
+):
+    """루브릭 항목 하나를 동사 단위 세부 항목으로 분해합니다."""
+    try:
+        decomposed = await decompose_rubric_item_with_ai(
+            item=request.item,
+            problem_context=request.problem_context or ""
+        )
+        return {"decomposed_items": decomposed}
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")

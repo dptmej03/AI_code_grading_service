@@ -72,6 +72,17 @@ class HistorySessionItem(BaseModel):
 class PartialScoreCriterion(BaseModel):
     item: str
     score: float
+    keywords: Optional[List[str]] = None
+
+
+class DecomposeRequest(BaseModel):
+    item: str
+    problem_context: Optional[str] = None
+
+
+class DecomposedItem(BaseModel):
+    item: str
+    keywords: List[str] = []
 
 
 class Problem(BaseModel):

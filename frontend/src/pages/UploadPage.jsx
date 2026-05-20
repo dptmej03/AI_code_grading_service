@@ -55,6 +55,11 @@ const dz = {
 /* ── Rubric Editor Component ── */
 function RubricEditor({ rubric, onChange }) {
   const [totalScoreEdit, setTotalScoreEdit] = useState(null);
+  const [decomposeModal, setDecomposeModal] = useState(false);
+  const [decomposeTarget, setDecomposeTarget] = useState(null); // { pIdx, cIdx, originalScore }
+  const [decomposeResult, setDecomposeResult] = useState([]); // [{item, score, keywords}]
+  const [decomposeLoading, setDecomposeLoading] = useState(false);
+  const [decomposeError, setDecomposeError] = useState('');
 
   const updateField = (field, value) => {
     if (field === 'total_score') {
@@ -100,6 +105,56 @@ function RubricEditor({ rubric, onChange }) {
     const criteria = [...problems[pIdx].partial_score_criteria, { item: '', score: 1 }];
     problems[pIdx] = { ...problems[pIdx], partial_score_criteria: criteria };
     onChange({ ...rubric, problems });
+  };
+
+  const handleDecomposeItem = async (pIdx, cIdx) => {
+    const criterion = rubric.problems[pIdx].partial_score_criteria[cIdx];
+    if (!criterion.item.trim()) return;
+
+    setDecomposeTarget({ pIdx, cIdx, originalScore: parseFloat(criterion.score) || 0 });
+    setDecomposeResult([]);
+    setDecomposeError('');
+    setDecomposeModal(true);
+    setDecomposeLoading(true);
+
+    try {
+      const problemContext = rubric.problems[pIdx].evaluation_guideline || '';
+      const res = await gradingAPI.decomposeItem(criterion.item, problemContext);
+      const items = res.data.decomposed_items.map(d => ({
+        item: d.item,
+        score: '',
+        keywords: (d.keywords || []).join(', ')
+      }));
+      setDecomposeResult(items);
+    } catch {
+      setDecomposeError('분해 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setDecomposeLoading(false);
+    }
+  };
+
+  const handleApplyDecomposition = () => {
+    const { pIdx, cIdx } = decomposeTarget;
+    const problems = [...rubric.problems];
+    const criteria = [...problems[pIdx].partial_score_criteria];
+    const newItems = decomposeResult.map(d => ({
+      item: d.item,
+      score: parseFloat(d.score) || 0,
+      keywords: d.keywords.split(',').map(k => k.trim()).filter(k => k)
+    }));
+    criteria.splice(cIdx, 1, ...newItems);
+    problems[pIdx] = { ...problems[pIdx], partial_score_criteria: criteria };
+    onChange({ ...rubric, problems });
+    setDecomposeModal(false);
+    setDecomposeTarget(null);
+    setDecomposeResult([]);
+  };
+
+  const closeDecomposeModal = () => {
+    setDecomposeModal(false);
+    setDecomposeTarget(null);
+    setDecomposeResult([]);
+    setDecomposeError('');
   };
 
   const removeCriteria = (pIdx, cIdx) => {
@@ -258,6 +313,15 @@ function RubricEditor({ rubric, onChange }) {
                   />
                   <span style={re.scoreUnit}>점</span>
                   <button
+                    style={{
+                      ...re.decomposeBtn,
+                      opacity: c.item.trim() ? 1 : 0.4,
+                      cursor: c.item.trim() ? 'pointer' : 'default',
+                    }}
+                    onClick={() => c.item.trim() && handleDecomposeItem(pIdx, cIdx)}
+                    title="동사 단위로 세분화"
+                  >분해</button>
+                  <button
                     style={re.removeCriteriaBtn}
                     onClick={() => removeCriteria(pIdx, cIdx)}
                     title="항목 삭제"
@@ -276,6 +340,90 @@ function RubricEditor({ rubric, onChange }) {
       <button style={re.addProblemBtn} onClick={addProblem}>
         + 문제 추가
       </button>
+
+      {/* 분해 모달 */}
+      {decomposeModal && (
+        <div style={re.modalOverlay} onClick={closeDecomposeModal}>
+          <div style={re.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={re.modalHeader}>
+              <span style={re.modalTitle}>동사 단위 세분화</span>
+              <button style={re.modalCloseBtn} onClick={closeDecomposeModal}>✕</button>
+            </div>
+
+            {decomposeTarget && (
+              <div style={re.modalOriginalScore}>
+                원래 배점: <strong>{decomposeTarget.originalScore}점</strong>
+                {' — '}세분화된 항목들의 배점 합계가 이 값을 초과할 수 없습니다.
+              </div>
+            )}
+
+            {decomposeLoading && (
+              <div style={re.modalLoading}>LLM이 항목을 분석 중...</div>
+            )}
+
+            {decomposeError && (
+              <div style={re.modalError}>{decomposeError}</div>
+            )}
+
+            {!decomposeLoading && decomposeResult.length > 0 && (() => {
+              const scoreSum = Math.round(decomposeResult.reduce((s, d) => s + (parseFloat(d.score) || 0), 0) * 100) / 100;
+              const exceeded = decomposeTarget && scoreSum > decomposeTarget.originalScore + 0.001;
+              return (
+                <>
+                  <div style={re.decomposeList}>
+                    {decomposeResult.map((d, i) => (
+                      <div key={i} style={re.decomposeItemCard}>
+                        <div style={re.decomposeItemText}>{d.item}</div>
+                        <div style={re.decomposeInputRow}>
+                          <label style={re.decomposeLabel}>배점</label>
+                          <input
+                            style={re.decomposeScoreInput}
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            placeholder="0"
+                            value={d.score}
+                            onChange={e => {
+                              const next = [...decomposeResult];
+                              next[i] = { ...next[i], score: e.target.value };
+                              setDecomposeResult(next);
+                            }}
+                          />
+                          <span style={re.scoreUnit}>점</span>
+                          <label style={{ ...re.decomposeLabel, marginLeft: 12 }}>핵심단어</label>
+                          <input
+                            style={re.decomposeKeyInput}
+                            placeholder="쉼표로 구분"
+                            value={d.keywords}
+                            onChange={e => {
+                              const next = [...decomposeResult];
+                              next[i] = { ...next[i], keywords: e.target.value };
+                              setDecomposeResult(next);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ ...re.decomposeScoreSummary, color: exceeded ? '#dc2626' : '#059669' }}>
+                    배점 합계: {scoreSum}점 / {decomposeTarget?.originalScore}점
+                    {exceeded && ' — 원래 배점을 초과했습니다'}
+                  </div>
+
+                  <div style={re.modalFooter}>
+                    <button style={re.modalCancelBtn} onClick={closeDecomposeModal}>취소</button>
+                    <button
+                      style={{ ...re.modalApplyBtn, opacity: exceeded ? 0.4 : 1, cursor: exceeded ? 'default' : 'pointer' }}
+                      onClick={() => !exceeded && handleApplyDecomposition()}
+                    >적용</button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -347,6 +495,61 @@ const re = {
   addProblemBtn: {
     background: '#f0f9ff', border: '2px dashed #93c5fd', color: '#2563eb', borderRadius: 12,
     padding: '14px', fontSize: 14, cursor: 'pointer', fontWeight: 600, width: '100%',
+  },
+  decomposeBtn: {
+    background: '#eff6ff', border: '1px solid #bfdbfe', color: '#2563eb', borderRadius: 6,
+    padding: '4px 8px', fontSize: 12, fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap',
+  },
+  modalOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  modalBox: {
+    background: '#fff', borderRadius: 16, padding: 28, width: '90%', maxWidth: 620,
+    maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+  },
+  modalHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  modalTitle: { fontSize: 17, fontWeight: 700, color: '#1e293b' },
+  modalCloseBtn: {
+    background: 'none', border: 'none', fontSize: 18, color: '#94a3b8', cursor: 'pointer', lineHeight: 1,
+  },
+  modalOriginalScore: {
+    fontSize: 13, color: '#475569', background: '#f8fafc', borderRadius: 8,
+    padding: '8px 12px', marginBottom: 16, border: '1px solid #e2e8f0',
+  },
+  modalLoading: {
+    textAlign: 'center', padding: '32px 0', color: '#64748b', fontSize: 14,
+  },
+  modalError: {
+    background: '#fef2f2', color: '#dc2626', padding: '10px 14px', borderRadius: 8,
+    fontSize: 13, border: '1px solid #fecaca',
+  },
+  decomposeList: { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 },
+  decomposeItemCard: {
+    border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', background: '#f8fafc',
+  },
+  decomposeItemText: { fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 8 },
+  decomposeInputRow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  decomposeLabel: { fontSize: 12, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' },
+  decomposeScoreInput: {
+    padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6, fontSize: 13,
+    width: 60, outline: 'none', textAlign: 'right',
+  },
+  decomposeKeyInput: {
+    flex: 1, padding: '5px 8px', border: '1.5px solid #e2e8f0', borderRadius: 6,
+    fontSize: 12, outline: 'none', minWidth: 100,
+  },
+  decomposeScoreSummary: {
+    fontSize: 13, fontWeight: 600, textAlign: 'right', padding: '6px 0', marginBottom: 14,
+  },
+  modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: 10 },
+  modalCancelBtn: {
+    padding: '9px 20px', border: '1.5px solid #e2e8f0', borderRadius: 8,
+    background: '#fff', color: '#64748b', fontSize: 14, cursor: 'pointer', fontWeight: 500,
+  },
+  modalApplyBtn: {
+    padding: '9px 20px', border: 'none', borderRadius: 8,
+    background: '#2563eb', color: '#fff', fontSize: 14, fontWeight: 600,
   },
 };
 
