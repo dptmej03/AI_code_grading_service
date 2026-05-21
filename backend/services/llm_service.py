@@ -304,8 +304,8 @@ async def decompose_rubric_item_with_ai(
 
         try:
             result = json5.loads(content)
-        except json5.JSON5DecodeError as e:
-            print(f"[JSON5 Parse Error] {e} | Content: {content[:300]}")
+        except Exception as e:
+            print(f"[JSON5 Parse Error] {type(e).__name__}: {e} | Content: {content[:300]}")
             raise ValueError(f"JSON 파싱 실패: {str(e)}")
         if not isinstance(result, list):
             raise ValueError("응답이 배열 형식이 아닙니다")
