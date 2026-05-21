@@ -62,6 +62,8 @@ function RubricEditor({ rubric, onChange }) {
   const [decomposeError, setDecomposeError] = useState('');
   // 타이핑 중 keywords 문자열 임시 저장 (key: `${pIdx}-${cIdx}`)
   const [keywordsText, setKeywordsText] = useState({});
+  // keywords 입력 필드 표시 여부
+  const [showKeywordsSet, setShowKeywordsSet] = useState(new Set());
 
   const updateField = (field, value) => {
     if (field === 'total_score') {
@@ -113,7 +115,7 @@ function RubricEditor({ rubric, onChange }) {
     const criterion = rubric.problems[pIdx].partial_score_criteria[cIdx];
     if (!criterion.item.trim()) return;
 
-    setDecomposeTarget({ pIdx, cIdx, originalScore: parseFloat(criterion.score) || 0 });
+    setDecomposeTarget({ pIdx, cIdx, originalScore: parseFloat(criterion.score) || 0, originalItem: criterion.item });
     setDecomposeResult([]);
     setDecomposeError('');
     setDecomposeModal(true);
@@ -330,32 +332,33 @@ function RubricEditor({ rubric, onChange }) {
                       title="항목 삭제"
                     >✕</button>
                   </div>
-                  <input
-                    style={re.criteriaKeywordsInput}
-                    placeholder="핵심단어 (쉼표로 구분)"
-                    value={(() => {
-                      const key = `${pIdx}-${cIdx}`;
-                      if (key in keywordsText) return keywordsText[key];
-                      return Array.isArray(c.keywords) ? c.keywords.join(', ') : '';
-                    })()}
-                    onChange={e => {
-                      const key = `${pIdx}-${cIdx}`;
-                      setKeywordsText(prev => ({ ...prev, [key]: e.target.value }));
-                    }}
-                    onBlur={e => {
-                      const key = `${pIdx}-${cIdx}`;
-                      const keywords = e.target.value
-                        .split(',')
-                        .map(k => k.trim())
-                        .filter(k => k.length > 0);
-                      updateCriteria(pIdx, cIdx, 'keywords', keywords);
-                      setKeywordsText(prev => {
-                        const next = { ...prev };
-                        delete next[key];
-                        return next;
-                      });
-                    }}
-                  />
+                  {(() => {
+                    const key = `${pIdx}-${cIdx}`;
+                    const hasKeywords = Array.isArray(c.keywords) && c.keywords.length > 0;
+                    const isVisible = hasKeywords || showKeywordsSet.has(key) || key in keywordsText;
+                    if (!isVisible) return (
+                      <button
+                        style={re.addKeywordsBtn}
+                        onClick={() => setShowKeywordsSet(prev => new Set([...prev, key]))}
+                      >+ 핵심단어 추가</button>
+                    );
+                    return (
+                      <input
+                        style={re.criteriaKeywordsInput}
+                        placeholder="핵심단어 (쉼표로 구분)"
+                        value={(() => {
+                          if (key in keywordsText) return keywordsText[key];
+                          return hasKeywords ? c.keywords.join(', ') : '';
+                        })()}
+                        onChange={e => setKeywordsText(prev => ({ ...prev, [key]: e.target.value }))}
+                        onBlur={e => {
+                          const keywords = e.target.value.split(',').map(k => k.trim()).filter(k => k.length > 0);
+                          updateCriteria(pIdx, cIdx, 'keywords', keywords);
+                          setKeywordsText(prev => { const next = { ...prev }; delete next[key]; return next; });
+                        }}
+                      />
+                    );
+                  })()}
                 </div>
               ))}
 
@@ -381,10 +384,16 @@ function RubricEditor({ rubric, onChange }) {
             </div>
 
             {decomposeTarget && (
-              <div style={re.modalOriginalScore}>
-                원래 배점: <strong>{decomposeTarget.originalScore}점</strong>
-                {' — '}세분화된 항목들의 배점 합계가 이 값을 초과할 수 없습니다.
-              </div>
+              <>
+                <div style={re.modalOriginalItem}>
+                  <span style={re.modalOriginalItemLabel}>원본 항목</span>
+                  <div style={re.modalOriginalItemText}>{decomposeTarget.originalItem}</div>
+                </div>
+                <div style={re.modalOriginalScore}>
+                  원래 배점: <strong>{decomposeTarget.originalScore}점</strong>
+                  {' — '}세분화된 항목들의 배점 합계가 이 값을 초과할 수 없습니다.
+                </div>
+              </>
             )}
 
             {decomposeLoading && (
@@ -403,7 +412,23 @@ function RubricEditor({ rubric, onChange }) {
                   <div style={re.decomposeList}>
                     {decomposeResult.map((d, i) => (
                       <div key={i} style={re.decomposeItemCard}>
-                        <div style={re.decomposeItemText}>{d.item}</div>
+                        <div style={re.decomposeItemHeaderRow}>
+                          <input
+                            style={re.decomposeItemInput}
+                            value={d.item}
+                            placeholder="항목 설명"
+                            onChange={e => {
+                              const next = [...decomposeResult];
+                              next[i] = { ...next[i], item: e.target.value };
+                              setDecomposeResult(next);
+                            }}
+                          />
+                          <button
+                            style={re.decomposeItemRemoveBtn}
+                            onClick={() => setDecomposeResult(decomposeResult.filter((_, j) => j !== i))}
+                            title="항목 삭제"
+                          >✕</button>
+                        </div>
                         <div style={re.decomposeInputRow}>
                           <label style={re.decomposeLabel}>배점</label>
                           <input
@@ -434,6 +459,10 @@ function RubricEditor({ rubric, onChange }) {
                         </div>
                       </div>
                     ))}
+                    <button
+                      style={re.decomposeAddItemBtn}
+                      onClick={() => setDecomposeResult([...decomposeResult, { item: '', score: '', keywords: '' }])}
+                    >+ 항목 추가</button>
                   </div>
 
                   <div style={{ ...re.decomposeScoreSummary, color: exceeded ? '#dc2626' : '#059669' }}>
@@ -517,7 +546,11 @@ const re = {
   },
   criteriaKeywordsInput: {
     padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12,
-    outline: 'none', background: '#f9fafb', fontStyle: 'italic', color: '#64748b',
+    outline: 'none', background: '#f9fafb', fontStyle: 'italic', color: '#64748b', width: '100%',
+  },
+  addKeywordsBtn: {
+    background: 'none', border: '1px dashed #bfdbfe', color: '#93c5fd', borderRadius: 6,
+    padding: '4px 10px', fontSize: 12, cursor: 'pointer', alignSelf: 'flex-start',
   },
   removeCriteriaBtn: {
     background: 'none', border: '1px solid #e2e8f0', color: '#94a3b8', borderRadius: 6,
@@ -563,7 +596,26 @@ const re = {
   decomposeItemCard: {
     border: '1.5px solid #e2e8f0', borderRadius: 10, padding: '12px 14px', background: '#f8fafc',
   },
-  decomposeItemText: { fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 8 },
+  modalOriginalItem: {
+    background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8,
+    padding: '10px 14px', marginBottom: 10,
+  },
+  modalOriginalItemLabel: { fontSize: 11, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  modalOriginalItemText: { fontSize: 13, color: '#78350f', marginTop: 4, fontWeight: 500 },
+  decomposeItemHeaderRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
+  decomposeItemInput: {
+    flex: 1, padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: 6,
+    fontSize: 13, outline: 'none', fontWeight: 600, color: '#1e293b',
+  },
+  decomposeItemRemoveBtn: {
+    background: 'none', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6,
+    width: 26, height: 26, cursor: 'pointer', fontSize: 12, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  decomposeAddItemBtn: {
+    background: 'none', border: '1px dashed #cbd5e1', color: '#64748b', borderRadius: 8,
+    padding: '7px 14px', fontSize: 13, cursor: 'pointer', width: '100%', fontWeight: 500,
+  },
   decomposeInputRow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   decomposeLabel: { fontSize: 12, color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' },
   decomposeScoreInput: {
