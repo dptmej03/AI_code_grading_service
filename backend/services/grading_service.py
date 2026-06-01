@@ -166,6 +166,8 @@ async def grade_student_notebook(
             stu_code += "### [학생 설명]\n" + "\n\n".join(c['source'] for c in stu_markdown_cells) + "\n\n### [학생 코드]\n"
         stu_code += "\n\n".join(c['source'] for c in stu_code_cells) if stu_code_cells else ""
 
+        nb_preamble = []
+
         # 코드 필수 여부 확인
         requires_code = getattr(problem, 'requires_code', True)
         has_code = bool(stu_code_cells and any(c.get('source', '').strip() for c in stu_code_cells))
