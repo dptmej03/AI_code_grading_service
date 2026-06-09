@@ -3,6 +3,7 @@ import json
 import uuid
 import asyncio
 import io
+import unicodedata
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Set
@@ -1420,9 +1421,9 @@ async def download_excel(
     row = 2
     for student in original_results:
         for problem in student.problems:
-            student_answer = "\n\n".join(
+            student_answer = unicodedata.normalize("NFC", "\n\n".join(
                 c.source for c in problem.code_cells if c.source.strip()
-            ) if problem.code_cells else ""
+            )) if problem.code_cells else ""
             for ps_idx, ps in enumerate(problem.partial_scores):
                 ws2.cell(row=row, column=1, value=student.student_id).alignment = center_align
                 ws2.cell(row=row, column=2, value=student.student_name or "").alignment = center_align
