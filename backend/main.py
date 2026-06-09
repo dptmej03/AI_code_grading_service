@@ -1436,7 +1436,7 @@ async def download_excel(
                     score_cell.fill = ai_error_fill
                 elif 0 < float(ps.score) < float(ps.max_score):
                     score_cell.fill = partial_score_fill
-                ws2.cell(row=row, column=6, value=ps.item).alignment = center_align
+                ws2.cell(row=row, column=6, value=ps.item).alignment = wrap_align
                 if ps_idx == 0:
                     ws2.cell(row=row, column=7, value=student_answer).alignment = wrap_align
                     ws2.cell(row=row, column=9, value=problem.ai_feedback or "").alignment = wrap_align
@@ -1445,12 +1445,10 @@ async def download_excel(
                     ws2.cell(row=row, column=c).border = thin_border
                 row += 1
 
+    # 컬럼별 너비: 학번/이름/문제/점수는 좁게, 채점항목/학생답변/피드백은 넓게 고정
+    col_widths = {1: 15, 2: 12, 3: 8, 4: 10, 5: 10, 6: 40, 7: 50, 8: 50, 9: 50}
     for col in range(1, 10):
-        max_len = max(
-            (len(str(ws2.cell(r2, col).value or "")) for r2 in range(1, row)),
-            default=0
-        )
-        ws2.column_dimensions[get_column_letter(col)].width = min(max_len + 4, 60)
+        ws2.column_dimensions[get_column_letter(col)].width = col_widths.get(col, 20)
     ws2.freeze_panes = "C2"
 
     # ── Sheet 3: 수정후채점결과 (교수 수정점수 + 코멘트) ─────────────────
