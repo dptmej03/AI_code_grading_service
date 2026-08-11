@@ -76,7 +76,9 @@ DEFAULT_MODEL = "fireworks/accounts/fireworks/models/kimi-k2p6"
 # 사용 가능한 모델 목록 (provider/model_id 형식)
 AVAILABLE_MODELS = [
     {"id": "fireworks/accounts/fireworks/models/kimi-k2p6",   "label": "kimi-k2.6",      "provider": "fireworks"},
+    {"id": "fireworks/accounts/fireworks/models/kimi-k3",     "label": "kimi-k3",        "provider": "fireworks"},
     {"id": "fireworks/accounts/fireworks/models/glm-5p1",     "label": "glm-5.1",        "provider": "fireworks"},
+    {"id": "fireworks/accounts/fireworks/models/glm-5p2",     "label": "glm-5.2",        "provider": "fireworks"},
     {"id": "fireworks/accounts/fireworks/models/qwen3p7-plus", "label": "Qwen3.7 Plus",  "provider": "fireworks"},
     # OpenAI 모델 (필요 시 주석 해제)
     # {"id": "openai/gpt-4o-mini",  "label": "gpt-4o-mini",  "provider": "openai"},
