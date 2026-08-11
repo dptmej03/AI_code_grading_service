@@ -196,6 +196,32 @@ def _load_rubric_guide() -> str:
     return ""
 
 
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+
+def _load_prompt(name: str) -> str:
+    """backend/prompts/{name}.md 파일을 읽어 반환. 채점 프롬프트 실험 시 이 폴더의
+    파일만 수정하면 되고, llm_service.py의 조립 로직은 건드릴 필요 없음."""
+    path = PROMPTS_DIR / f"{name}.md"
+    if not path.exists():
+        raise FileNotFoundError(f"프롬프트 파일을 찾을 수 없습니다: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def _load_system_user_prompt(name: str) -> Tuple[str, str]:
+    """backend/prompts/{name}.md 파일을 '===SYSTEM===' / '===USER===' 마커 기준으로
+    쪼개서 (system_template, user_template) 튜플로 반환.
+    두 프롬프트를 한 파일에서 같이 보고 편집하되, API에는 기존처럼 system/user로 나눠 보냄."""
+    text = _load_prompt(name)
+    if text.count("===SYSTEM===") != 1 or text.count("===USER===") != 1:
+        raise ValueError(
+            f"프롬프트 파일에 ===SYSTEM=== / ===USER=== 마커가 각각 정확히 1개씩 있어야 합니다: {name}.md"
+        )
+    _, rest = text.split("===SYSTEM===", 1)
+    system_part, user_part = rest.split("===USER===", 1)
+    return system_part.strip(), user_part.strip()
+
+
 async def generate_rubric_with_ai(
     answer_problems: Dict[int, Dict[str, Any]],
     total_score: float = 100.0,
@@ -475,7 +501,9 @@ async def grade_with_ai(
     # 실행 결과 (있으면 포함)
     execution_context = ""
     if execution_output:
-        execution_context = f"\n\n## ⚠️ 코드 실행 에러 정보 (참고만 — 채점에 직접 반영 금지)\n```\n{execution_output}\n```\n### 🚫 CRITICAL RULE: 실행 오류는 절대 reason에 포함 금지\n\n위 실행 오류는 **컨텍스트 정보**일 뿐, 이를 채점 이유(reason)에 쓰면 **안 됩니다**.\n\n❌ **절대 금지 reason 표현**:\n- '코드 실행 오류로 인해 평가 불가'\n- '런타임 에러 발생으로 정상 평가 불가'\n- '실행되지 않아 평가 불가'\n- '다른 변수 미정의로 인해 실행 불가'\n- '실행 오류 때문에 결과 생성 불가'\n- 기타 모든 '오류/에러/실행/불가/구현' 같은 키워드\n\n✅ **올바른 reason 표현** (코드 로직 기반):\n- 맞은 경우: \"cv2.threshold(src, 120, 255, cv2.THRESH_BINARY)로 올바르게 이진화 구현\"\n- 틀린 경우: \"np.bitwise_not은 인자 1개만 받는 함수인데 2개를 전달하여 논리 오류\"\n- 틀린 경우: \"루브릭에서 십진수 표현을 요구했으나 이진수로 표현함\"\n\n### 핵심 규칙 (반드시 따르기)\n- reason은 **항상** 해당 rubric 항목의 코드 로직 평가만 서술\n- \"실행 오류\", \"런타임\", \"불가\", \"오류\" 같은 단어 절대 금지\n- 다른 항목의 오류가 이 항목에 영향을 주면 안 됨\n- **이 항목의 코드에 로직 오류**가 있으면 0점 (하지만 이유는 로직만 설명)"
+        execution_context = _load_prompt("grading_execution_error_context").format(
+            execution_output=execution_output
+        )
 
     # 전체 공통 가이드라인 (있으면 포함)
     global_guideline_text = ""
@@ -487,159 +515,31 @@ async def grade_with_ai(
     if remaining_score and remaining_score > 0:
         remaining_info = f"\n\n⚠️ **중요**: 아래 루브릭 항목들의 합계가 {full_score}점보다 작습니다. 아래 점수 항목 외에 **{remaining_score:.1f}점의 추가 배점**이 있으므로, 전체 코드 품질과 학생의 이해도를 종합적으로 평가하여 이 {remaining_score:.1f}점을 추가로 부여하세요."
 
-    scoring_instruction = """2. **점수 부여 기준 (3단계)**:
-   - **부분점수 항목들** (0점 / 절반점수 / 만점 중 택일):
-     - ✅ **완전 충족** → 해당 항목의 **만점** (score = max_score)
-     - ⚠️ **부분 충족** → 해당 항목의 **절반점수** (score = max_score * 0.5)
-       * 예: "개념과 처리 과정 자세히 설명" (2점) → 개념은 설명했으나 과정 부족 → **1점**
-       * 예: "원본·이진화·결과 3장 출력" (1점) → 2장만 출력함 → **0.5점**
-       * 예: 항목에서 요구한 요소 중 일부만 충족
-     - ❌ **불충족** → **0점**
-     - ⚠️ **루브릭 요구사항 고려**: 각 항목의 요구사항(예: "십진수로 표현")을 확인하여 평가. 요구사항 위반이 있으면 감점 고려.
-     - ⚠️ **독립 평가 원칙** (CRITICAL): 다른 항목의 오류가 이 항목 점수를 결정하면 안 됨. 단, **이 항목 자체의 코드에 로직 오류**(잘못된 함수 사용, 잘못된 인자, 잘못된 로직 등)가 있으면 0점.
-     - ⚠️ **reason 필수 규칙** (매우 중요): reason은 반드시 해당 코드 로직에 대한 구체적 설명만. 절대 금지 표현:
-       * '실행 오류로 인해 평가 불가'
-       * '런타임 에러로 평가 불가'
-       * '다른 변수 미정의로 인해 실행 불가'
-       * 기타 모든 "오류/실행/불가" 표현
-       - ✅ 맞은 경우 예: "cv2.threshold(src, 120, 255, cv2.THRESH_BINARY)로 올바르게 이진화 구현"
-       - ✅ 부분 충족 예: "히스토그램 평활화의 개념은 잘 설명했으나 처리 과정 설명이 부족"
-       - ✅ 틀린 경우 예: "np.bitwise_not은 인자 1개만 받는데 2개를 전달하여 로직 오류"
-   - **추가 배점** (AI 자율 판단 - 위 항목들 외의 배점):
-     - 위 항목들 점수 합계 < full_score인 경우, 그 차이를 전체 코드 품질로 자율적으로 부여
-     - 코드 구현의 완성도, 효율성, 가독성 등을 종합 평가하여 추가 점수 부여
-     - 실행 오류가 있어도 → 추가 배점은 코드 로직 기반으로 판단 (오류 자체로 0점 금지)"""
-    consistency_instruction = """feedback과 score, reason과 score는 반드시 일관되어야 합니다.
-
-**reason ↔ score 자동 매핑 규칙 (CRITICAL)**:
-- reason이 "완전 충족"을 시사하면 → score = max_score
-- reason이 "부분 충족"을 시사하면 → score = max_score * 0.5 (반드시!)
-- reason이 "완전 불충족"을 시사하면 → score = 0
-
-**"부분 충족"으로 간주되는 reason 표현 (이런 표현 쓰면 반드시 score = max_score * 0.5)**:
-- "A는 했지만 B는 안 함" / "A는 했으나 B는 못함"
-- "A는 있지만 B가 부족" / "A는 있으나 B가 없음"
-- "A는 잘했으나 B는 미흡"
-- "일부만 충족", "한 가지만 함", "절반만"
-- "요구사항 중 일부 누락"
-- "주요 부분은 했으나 세부사항 누락"
-
-**예시**:
-- reason: "평활화 설명은 있지만 YCrCb 변환 이유 설명이 없음" → score = max_score * 0.5 (절대 0이면 안 됨)
-- reason: "개념은 잘 설명했으나 처리 과정 설명이 부족" → score = max_score * 0.5
-- reason: "원본과 결과는 출력했으나 이진화 영상이 누락됨" → score = max_score * 0.5
-
-단, 해당 항목의 코드 자체에 로직 오류가 있으면 위 규칙과 무관하게 0점."""
-
-    system_prompt = f"""## 📋 응답 형식 (반드시 정확히 이것만 출력하세요)
-
-{{
-  "analysis": "학생 코드의 핵심 로직 분석 (1-2문장)",
-  "rubric_scores": [
-    {{"item": "조건 처리", "score": 5, "max_score": 5, "reason": "if-elif-else로 모든 경우를 올바르게 처리"}},
-    {{"item": "출력 형식", "score": 2.5, "max_score": 5, "reason": "지정된 형식으로 출력했으나 소수점 자리수가 부족"}}
-  ],
-  "feedback": "개선점:\\n- 출력 포맷 조정\\n- 엣지 케이스 처리 추가",
-  "total_score": 7.5
-}}
-
----
-
-## 역할 및 채점 원칙
-
-당신은 현업 시니어 개발자이자 꼼꼼한 컴퓨터공학 전공 조교입니다.
-{global_guideline_text}{remaining_info}
-
-### 1. **다양성 존중 + 필수 키워드 검사**
-학생의 구현 방식이 모범 답안과 다르더라도, 논리가 타당하고 결과가 올바르면 정답으로 인정.
-
-**필수 키워드 규칙** (루브릭에 [필수 키워드]가 명시된 경우):
-- ✅ **키워드 포함 + 올바른 맥락/파라미터** → 만점
-  * 예: "[필수 키워드: cv2.threshold, 120, THRESH_BINARY]"
-  * 학생 코드: `cv2.threshold(src, 120, 255, cv2.THRESH_BINARY)` → 만점 (파라미터 120 정확함)
-- ⚠️ **키워드 포함 + 파라미터/맥락 오류** → 부분점수 또는 감점
-  * 학생 코드: `cv2.threshold(src, 150, 255, cv2.THRESH_BINARY)` → 파라미터 120이 아닌 150 → 부분점수 또는 0점
-- ❌ **키워드 없음 또는 간접적 표현** → 0점
-  * 예: "변환 후 십진수" 형태는 인정하지 않음 — 명시적으로 포함되어야 함
-
-**평가 방법**: 키워드는 필수지만, 있을 때는 반드시 **파라미터, 함수명, 문맥까지 함께 검토**하여 올바르게 사용했는지 판단.
-
-### 2. **점수 부여 기준 (3단계만 허용)**
-{scoring_instruction}
-
-### 3. **reason 작성 규칙** (가장 중요)
-**✅ 올바른 reason**:
-- "cv2.threshold(src, 120, 255, cv2.THRESH_BINARY)로 올바르게 이진화 구현" (만점)
-- "원본과 결과는 출력했으나 이진화 영상이 누락됨" (부분점수)
-- "np.bitwise_not은 인자 1개만 받는데 2개를 전달하여 로직 오류" (0점)
-
-**❌ 금지된 reason** (이렇게 쓰면 안 됨):
-- "런타임 에러 발생으로 평가 불가"
-- "변수 미정의로 인해 실행 불가"
-- "코드 실행 오류로 인해 생성 불가"
-- "다른 변수가 없어서 오류 발생"
-
-**규칙**: reason은 항상 **해당 항목의 요구사항**에 대한 **코드 로직 기반 판단**만 서술. 다른 항목의 오류나 실행 결과는 feedback에만 작성.
-
-### 4. 🚫 **루브릭 범위 밖 채점 절대 금지** (CRITICAL)
-채점 범위는 **루브릭 항목 텍스트**가 요구하는 것에만 100% 한정된다.
-
-- 루브릭 항목이 요구하지 않은 것으로 감점하면 **채점 오류**다
-- **루브릭 항목 텍스트를 읽고, 그 요구사항만 충족했는지만 판단하라**
-
-**항목 분석 방법**:
-1) 항목명을 읽고 요구사항만 추출
-2) 학생 코드에서 그 요구사항 충족 여부만 확인
-3) 모두 충족 → 만점 / 일부 충족 → 절반점수 / 불충족 → 0점
-
-### 5. **해설과 점수의 일관성**
-{consistency_instruction}
-
-### 6. 🚫 **완전 독립 채점** (CRITICAL)
-각 루브릭 항목은 **다른 모든 항목과 완전히 독립적으로** 채점한다.
-
-- **다른 셀, 다른 문항, 다른 변수의 런타임 에러**는 이 항목 채점에 영향을 줄 수 없다
-- 예: 위 셀에서 변수가 미정의되어 런타임 에러 발생 → 이 항목 로직 자체가 맞다면 만점
-- 예: 다른 문항의 함수가 잘못됨 → 이 항목과 무관, 이 항목 로직만 보고 판단
-- **오직 이 항목이 요구하는 코드 로직만 보고 점수를 결정하라**
-- 런타임 에러 언급은 feedback에만 가능, reason에는 절대 금지
-
-### 7. **feedback 작성 규칙** (반드시 준수)
-- 개선점만 작성. 잘한 점(칭찬)은 절대 포함 금지
-- `*` 기호 사용 절대 금지 (마크다운 강조 표현 금지)
-- 형식: "개선점:\\n- 항목1\\n- 항목2"
-
----
-
-## 평가 절차
-1. **Analysis**: 학생 코드의 핵심 로직 분석
-2. **Rubric Evaluation**: 각 항목별 점수 부여
-3. **Feedback**: 개선점만 작성 (잘한 점 제외, * 기호 금지)"""
+    scoring_instruction = _load_prompt("grading_scoring_instruction")
+    consistency_instruction = _load_prompt("grading_consistency_instruction")
 
     # 문제별 평가 가이드라인
     guideline_text = ""
     if problem_description:
         guideline_text = f"\n\n## 이 문항의 평가 가이드라인\n{problem_description}"
 
-    user_prompt = f"""[문제 {problem_id}] 다음 학생 코드를 평가해주세요.{guideline_text}
+    system_template, user_template = _load_system_user_prompt("grading_prompt")
 
-## 모범 답안 (참고 자료 - 구현 방식이 다르면 틀린 것 아님)
-```python
-{answer_code[:1500]}
-```
+    system_prompt = system_template.format(
+        global_guideline_text=global_guideline_text,
+        remaining_info=remaining_info,
+        scoring_instruction=scoring_instruction,
+        consistency_instruction=consistency_instruction,
+    )
 
-## 학생 코드
-```python
-{student_code[:2000]}
-```{execution_context}
-
-## 채점 루브릭 (부분 점수 기준)
-{rubric_text}
-
-위의 평가 가이드라인과 루브릭에 기반하여 학생 코드를 평가하세요.
-모범 답안의 구현 방식과 다르더라도, 문제를 올바르게 해결했고 기준들을 충족한다면 정답으로 인정하세요.
-
-🚫 다시 한번 강조: 반드시 `{{`로 시작하는 응답만 반환하세요."""
+    user_prompt = user_template.format(
+        problem_id=problem_id,
+        guideline_text=guideline_text,
+        answer_code=answer_code[:1500],
+        student_code=student_code[:2000],
+        execution_context=execution_context,
+        rubric_text=rubric_text,
+    )
 
     provider, actual_model_name = parse_model_id(model or DEFAULT_MODEL)
     client, model_name = get_llm_client(model or DEFAULT_MODEL)
